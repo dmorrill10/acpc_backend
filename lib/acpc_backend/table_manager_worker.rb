@@ -2,9 +2,6 @@ require 'thread'
 require_relative 'table_manager/table_manager'
 using TableManager::MonkeyPatches::IntegerAsProcessId
 
-# Email on error
-require_relative 'setup_rusen'
-
 # For job scheduling
 require 'sidekiq'
 

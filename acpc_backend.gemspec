@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{Backend components to the ACPC Poker GUI Client}
   spec.description   = %q{Backend components to the ACPC Poker GUI Client. Includes a player that saves states from the dealer to persistent storage, and components to start, stop, and manage match components.}
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
+  spec.homepage      = "https://github.com/dmorrill10/acpc_backend"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
@@ -19,22 +19,33 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  # To send emails
+  spec.add_dependency "pony"
+
+  # To spawn workers
   spec.add_dependency "sidekiq"
+
+  # For persistence
   spec.add_dependency "mongoid", '~> 5.0.0'
+
+  # For poker logic
   spec.add_dependency "acpc_poker_types"
   spec.add_dependency 'acpc_dealer', '~> 2.0'
   spec.add_dependency 'acpc_poker_player_proxy', '~> 1.1'
 
-  # Simple exception email notifications
+  # sSimple exception email notifications
   spec.add_dependency 'rusen'
 
-  # To run background processes
+  # To run processes asynchronously
   spec.add_dependency 'process_runner', '~> 0.0'
 
   spec.add_dependency 'timeout'
 
   # For better errors in WAPP
   spec.add_dependency 'contextual_exceptions'
+
+  # For better logging
+  spec.add_dependency 'awesome_print'
 
   spec.add_development_dependency "bundler", "~> 1.10"
   spec.add_development_dependency "rake", "~> 10.0"

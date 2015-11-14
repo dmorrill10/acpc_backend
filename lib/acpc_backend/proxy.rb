@@ -1,18 +1,17 @@
-require_relative '../../lib/database_config'
-require_relative '../models/match'
-require_relative '../models/match_slice'
+require_relative 'config'
+require_relative 'match'
+require_relative 'match_slice'
 
-# @todo These *must* be after database_config, otherwise segfaults will occur. Don't know why.
 require 'acpc_poker_player_proxy'
 require 'acpc_poker_types'
 
-require_relative '../../lib/application_defs'
-
-require_relative '../../lib/simple_logging'
+require_relative 'simple_logging'
 using SimpleLogging::MessageFormatting
 
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
+
+module AcpcBackend
 
 # A proxy player for the web poker application.
 class WebApplicationPlayerProxy
@@ -20,6 +19,26 @@ class WebApplicationPlayerProxy
   include AcpcPokerTypes
 
   exceptions :unable_to_create_match_slice
+
+  def self.start!(match)
+    game_definition = GameDefinition.parse_file(match.game_definition_file_name)
+    match.game_def_hash = game_definition.to_h
+    match.save!
+
+    proxy = new(
+      match.id,
+      AcpcDealer::ConnectionInformation.new(
+        match.port_numbers[match.seat - 1],
+        ::AcpcBackend::DEALER_HOST
+      ),
+      match.seat - 1,
+      game_definition,
+      match.player_names.join(' '),
+      match.number_of_hands
+    ) do |players_at_the_table|
+      yield players_at_the_table if block_given?
+    end
+  end
 
   # @todo Reduce the # of params
   #
@@ -67,6 +86,8 @@ class WebApplicationPlayerProxy
   # @see PlayerProxy#play!
   def play!(action)
     log __method__, action: action
+
+    action = PokerAction.new(action) unless action.is_a?(PokerAction)
 
     @player_proxy.play! action do |players_at_the_table|
       update_database! players_at_the_table
@@ -252,4 +273,5 @@ class WebApplicationPlayerProxy
 
     self
   end
+end
 end

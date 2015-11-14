@@ -1,8 +1,25 @@
 # AcpcBackend
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/acpc_backend`. To experiment with that code, run `bin/console` for an interactive prompt.
+Must be able to accomplish the following tasks:
 
-TODO: Delete this and the text above, and describe your gem
+- Start a dealer
+- Start a bot and have it connect to the dealer
+- Start multiple bots and have them connect to the dealer
+- Start a proxy and connect it to the dealer
+- Send actions to the proxy for them to be played
+- Ensure dealer processes are killed when matches are finished
+- Ensure the number of matches being run is less than set maximum
+- Manage a queue of matches
+    - Start the next match in the queue when one finishes
+- Manage a pool of port on which remote bots can connect to dealers
+
+The following tasks can be done in parallel:
+
+- Playing actions
+- Starting proxies
+- Starting bots
+
+Everything else must be done sequentially.
 
 ## Installation
 
