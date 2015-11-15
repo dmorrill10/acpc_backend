@@ -10,11 +10,12 @@ module AcpcBackend
 module Dealer
   extend SimpleLogging
 
-  @logger = ::AcpcBackend.new_log 'dealer.log'
+  @logger = nil
 
   # @return [Hash<Symbol, Object>] The dealer information
   # @note Saves the actual port numbers used by the dealer instance in +match+
   def self.start(options, match, port_numbers: nil)
+    @logger ||= ::AcpcBackend.new_log 'dealer.log'
     log __method__, options: options
 
     dealer_arguments = {

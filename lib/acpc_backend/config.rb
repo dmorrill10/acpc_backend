@@ -60,15 +60,29 @@ module AcpcBackend
     include ContextualExceptions::ContextualError
   end
 
+  def self.raise_uninitialized
+    raise UninitializedError.new(
+      "Unable to complete with AcpcBackend uninitialized. Please initialize AcpcBackend with configuration settings by calling AcpcBackend.load! with a (YAML) configuration file name."
+    )
+  end
+
   @@config = nil
 
   def self.config
-    @@config
+    if @@config
+      @@config
+    else
+      raise_uninitialized
+    end
   end
 
   @@exhibition_config = nil
   def self.exhibition_config
-    @@exhibition_config
+    if @@exhibition_config
+      @@exhibition_config
+    else
+      raise_uninitialized
+    end
   end
 
   @@is_initialized = false
@@ -125,9 +139,7 @@ module AcpcBackend
   end
 
   def self.raise_if_uninitialized
-    raise UninitializedError.new(
-      "Unable to complete with AcpcBackend uninitialized. Please initialize AcpcBackend with configuration settings by calling AcpcBackend.load! with a (YAML) configuration file name."
-    ) unless initialized?
+    raise_uninitialized unless initialized?
   end
 
   def self.new_log(log_file_name)

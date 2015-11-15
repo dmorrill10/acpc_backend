@@ -3,7 +3,6 @@ require 'mongoid'
 require 'acpc_poker_types/game_definition'
 
 require_relative 'config'
-AcpcBackend.raise_if_uninitialized
 
 module AcpcBackend
 class MatchSlice

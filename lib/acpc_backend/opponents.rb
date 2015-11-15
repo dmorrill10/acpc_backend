@@ -7,10 +7,11 @@ module AcpcBackend
 module Opponents
   extend SimpleLogging
 
-  @logger = ::AcpcBackend.new_log 'opponents.log'
+  @logger = nil
 
   # @return [Array<Integer>] PIDs of the opponents started
   def self.start(*bot_start_commands)
+    @logger ||= ::AcpcBackend.new_log 'opponents.log'
     log __method__, num_opponents: bot_start_commands.length
 
     bot_start_commands.map do |bot_start_command|

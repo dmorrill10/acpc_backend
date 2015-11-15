@@ -1,7 +1,6 @@
 require 'delegate'
 require 'timeout'
 
-require 'match'
 require 'acpc_poker_types/match_state'
 require 'acpc_poker_types/game_definition'
 require 'acpc_poker_types/hand'
@@ -9,6 +8,9 @@ require 'acpc_poker_types/hand'
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
 
+require_relative 'match'
+
+module AcpcBackend
 class MatchView < SimpleDelegator
   include AcpcPokerTypes
 
@@ -197,4 +199,5 @@ class MatchView < SimpleDelegator
     end
     self
   end
+end
 end
