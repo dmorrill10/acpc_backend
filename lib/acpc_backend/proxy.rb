@@ -13,8 +13,7 @@ using ContextualExceptions::ClassRefinement
 
 module AcpcBackend
 
-# A proxy player for the web poker application.
-class WebApplicationPlayerProxy
+class Proxy
   include SimpleLogging
   include AcpcPokerTypes
 
@@ -55,7 +54,7 @@ class WebApplicationPlayerProxy
     player_names='user p2',
     number_of_hands=1
   )
-    @logger = Logger.from_file_name(File.join(ApplicationDefs::LOG_DIRECTORY, 'proxy_logs', "#{match_id}.#{users_seat}.log")).with_metadata!
+    @logger = AcpcBackend.new_logger File.join('proxies', "#{match_id}.#{users_seat}.log")
 
     log __method__, {
       dealer_information: dealer_information,

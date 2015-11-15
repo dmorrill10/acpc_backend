@@ -1,22 +1,21 @@
 require 'thread'
-require_relative 'table_manager/table_manager'
-using TableManager::MonkeyPatches::IntegerAsProcessId
-
-# For job scheduling
 require 'sidekiq'
-
-require_relative '../../lib/simple_logging'
-using SimpleLogging::MessageFormatting
-
 require 'timeout'
 
-module TableManager
+require_relative 'dealer'
+require_relative 'monkey_patches'
+using AcpcBackend::MonkeyPatches::IntegerAsProcessId
+
+require_relative 'simple_logging'
+using SimpleLogging::MessageFormatting
+
+module AcpcBackend
   class Null
-    def method_missing(*args, &block)
-      self
-    end
+    def method_missing(*args, &block) self end
   end
   module HandleException
+    extend SimpleLogging
+
     protected
 
     # @param [String] match_id The ID of the match in which the exception occurred.
@@ -37,11 +36,16 @@ module TableManager
   MAINTAIN_COMMAND = 'maintain'
 
   class Maintainer
-    include SimpleLogging
     include ParamRetrieval
     include HandleException
 
-    MAINTENANCE_INTERVAL = 30 # seconds
+    def start_players!(key, match)
+      if match
+        Timeout::timeout(MAX_TIME_TO_WAIT_FOR_PLAYERS_TO_START_S) do
+          @table_queues[key].start_players! match
+        end
+      end
+    end
 
     def initialize(logger_)
       @logger = logger_
@@ -54,37 +58,27 @@ module TableManager
         # Enqueue matches that are waiting
         @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
           match = @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options
-          if match
-            Timeout::timeout(THREE_MINUTES) do
-              @table_queues[game_definition_key].start_players! match
-            end
-          end
+          start_players! game_definition_key, match
         end
       end
 
       @syncer = Mutex.new
 
-      @maintaining_ = false
+      @is_maintaining = false
 
       log(__method__)
     end
 
-    def maintaining?() @maintaining_ end
-
-    THREE_MINUTES = 180
+    def maintaining?() @is_maintaining end
 
     def maintain!
-      @maintaining_ = true
-      maintenance_logger = Logger.from_file_name(
-        File.join(
-          ApplicationDefs::LOG_DIRECTORY,
-          'table_manager.maintenance.log'
-        )
-      ).with_metadata!
+      @is_maintaining = true
+      maintenance_logger = AcpcBackend.new_log 'maintenance.log'
+
       log(__method__, {started_maintenance_thread: true})
       loop do
         log_with maintenance_logger, __method__, msg: "Going to sleep"
-        sleep MAINTENANCE_INTERVAL
+        sleep MAINTENANCE_INTERVAL_S
         log_with maintenance_logger, __method__, msg: "Starting maintenance"
 
         begin
@@ -101,18 +95,13 @@ module TableManager
               end
             end
           end
-          started_match.each do |key, match|
-            if match
-              Timeout::timeout(THREE_MINUTES) do
-                @table_queues[key].start_players! match
-              end
-            end
-          end
+          started_match.each { |key, match| start_players! key, match }
           if do_update_match_queue
             @match_communicator.update_match_queue!
           end
           clean_up_matches!
         rescue => e
+          @is_maintaining = false
           handle_exception nil, e
           Rusen.notify e # Send an email notification
         end
@@ -157,13 +146,7 @@ module TableManager
             do_update_match_queue = true
           end
         end
-        started_match.each do |key, match|
-          if match
-            Timeout::timeout(THREE_MINUTES) do
-              @table_queues[key].start_players! match
-            end
-          end
-        end
+        started_match.each { |key, match| start_players! key, match }
         if do_update_match_queue
           @match_communicator.update_match_queue!
         end
@@ -277,7 +260,6 @@ module TableManager
   end
 
   class StatefulWorker
-    include SimpleLogging
     include ParamRetrieval
     include HandleException
     include SidekiqClientMiddlewareWithStatefulMaintainer
@@ -285,13 +267,8 @@ module TableManager
     attr_accessor :maintainer
 
     def initialize
-      @logger = Logger.from_file_name(
-        File.join(
-          ApplicationDefs::LOG_DIRECTORY,
-          'table_manager.log'
-        )
-      ).with_metadata!
-      log __method__, 'Starting new TMSW'
+      @logger = AcpcBackend.new_log 'table_manager.log'
+      log __method__, "Starting new #{self.class()}"
       @maintainer = Maintainer.new @logger
     end
 

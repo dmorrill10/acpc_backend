@@ -1,11 +1,9 @@
-require 'test_helper'
+require 'support/spec_helper'
 
-class AcpcBackendTest < Minitest::Test
-  def test_that_it_has_a_version_number
-    refute_nil ::AcpcBackend::VERSION
-  end
+require 'acpc_backend'
 
-  def test_it_does_something_useful
-    assert false
+describe AcpcBackend do
+  it 'has a version number' do
+    ::AcpcBackend::VERSION.wont_be_nil
   end
 end

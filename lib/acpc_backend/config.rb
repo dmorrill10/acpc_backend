@@ -4,6 +4,7 @@ require 'mongoid'
 require 'moped'
 require 'rusen'
 require 'contextual_exceptions'
+require 'acpc_dealer'
 
 require_relative 'simple_logging'
 using SimpleLogging::MessageFormatting
@@ -11,56 +12,82 @@ using SimpleLogging::MessageFormatting
 require_relative 'utils'
 
 module AcpcBackend
-  module ExhibitionConstants
+  class Config
+    THIS_MACHINE = Socket.gethostname
+    DEALER_HOST = THIS_MACHINE
+
+    attr_reader :file, :log_directory, :my_log_directory
+
+    def initialize(file_path, log_directory_, match_log_directory_, interpolation_hash)
+      @file = file_path
+      JSON.parse(File.read(file_path)).each do |constant, val|
+        define_singleton_method(constant.to_sym) do
+          ::AcpcBackend.interpolate_all_strings(val, interpolation_hash)
+        end
+      end
+      @log_directory = log_directory_
+      @match_log_directory = match_log_directory_
+      @my_log_directory = File.join(@log_directory, 'acpc_backend')
+    end
+
+    def this_machine() THIS_MACHINE end
+    def dealer_host() DEALER_HOST end
+  end
+
+  class ExhibitionConfig
+    attr_reader :file
+
+    def initialize(file_path, interpolation_hash)
+      @file = file_path
+      JSON.parse(File.read(file_path)).each do |constant, val|
+        define_singleton_method(constant.to_sym) do
+          ::AcpcBackend.interpolate_all_strings(val, interpolation_hash)
+        end
+      end
+    end
   end
 
   class UninitializedError < StandardError
     include ContextualExceptions::ContextualError
   end
 
-  THIS_MACHINE = Socket.gethostname
-  DEALER_HOST = THIS_MACHINE
+  @@config = nil
+
+  def self.config
+    @@config
+  end
+
+  @@exhibition_config = nil
+  def self.exhibition_config
+    @@exhibition_config
+  end
 
   @@is_initialized = false
 
-  def self.read_config(config_data, yaml_directory)
-    interpolation_hash = { pwd: yaml_directory, home: Dir.home, :~ => Dir.home }
+  def self.load_config!(config_data, yaml_directory = File.pwd)
+    interpolation_hash = {
+      pwd: yaml_directory,
+      home: Dir.home,
+      :~ => Dir.home,
+      dealer_directory: AcpcDealer::DEALER_DIRECTORY
+    }
+    config = interpolate_all_strings(config_data, interpolation_hash)
 
-    final_data = config_data.dup
-
-    config_data['paths'].each do |k, v|
-      final_data['paths'][k] = resolve_path(v % interpolation_hash, yaml_directory).to_s
-    end
-    final_data
-  end
-
-  def self.read_config_file(config_file_path)
-    read_config YAML.load_file(config_file_path), File.dirname(config_file_path)
-  end
-
-  def self.load!(config_file)
-    config = read_config_file config_file
-    CONSTANTS_FILE = config['paths']['table_manager_constants']
-
-    JSON.parse(File.read(CONSTANTS_FILE)).each do |constant, val|
-      self.const_set(constant, val) unless const_defined? constant
-    end
-
-    MONGOID_CONFIG = config['paths']['mongoid_config']
-    MONGOID_ENV = config['mongoid_env'].to_sym
-    LOG_DIRECTORY = config['paths']['log_directory']
-    MATCH_LOG_DIRECTORY = config['paths']['match_log_directory']
-    MY_LOG_DIRECTORY = File.join(LOG_DIRECTORY, 'acpc_backend')
-
-    self::ExhibitionConstants.const_set('CONSTANTS_FILE', config['paths']['exhibition_constants'])
-    JSON.parse(File.read(self::ExhibitionConstants::CONSTANTS_FILE)).each do |constant, val|
-      self::ExhibitionConstants.const_set(constant, val) unless const_defined? constant
-    end
+    @@config = Config.new(
+      config['table_manager_constants'],
+      config['log_directory'],
+      config['match_log_directory'],
+      interpolation_hash
+    )
+    @@exhibition_config = ExhibitionConfig.new(
+      config['exhibition_constants'],
+      interpolation_hash
+    )
 
     # Mongoid
-    Mongoid.logger = Logger.from_file_name(File.join(LOG_DIRECTORY, 'mongoid.log'))
-    Moped.logger = Logger.from_file_name(File.join(LOG_DIRECTORY, 'moped.log'))
-    Mongoid.load!(MONGOID_CONFIG, MONGOID_ENV)
+    Mongoid.logger = Logger.from_file_name(File.join(@@config.log_directory, 'mongoid.log'))
+    Moped.logger = Logger.from_file_name(File.join(@@config.log_directory, 'moped.log'))
+    Mongoid.load!(config['mongoid_config'], config['mongoid_env'].to_sym)
 
     # Rusen
     if config['error_report']
@@ -74,6 +101,10 @@ module AcpcBackend
     end
 
     @@is_initialized = true
+  end
+
+  def self.load!(config_file)
+    load_config! YAML.load_file(config_file_path), File.dirname(config_file_path)
   end
 
   def self.notify(exception)
@@ -92,6 +123,10 @@ module AcpcBackend
 
   def self.new_log(log_file_name)
     raise_if_uninitialized
-    Logger.from_file_name(File.join(MY_LOG_DIRECTORY, log_file_name)).with_metadata!
+    Logger.from_file_name(File.join(@@config.my_log_directory, log_file_name)).with_metadata!
+  end
+
+  def self.unload!
+    @@is_initialized = false
   end
 end

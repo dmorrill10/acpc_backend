@@ -1,0 +1,16 @@
+development:
+  database: test_dev
+  clients:
+    default:  
+      hosts: 
+        - localhost:27017
+      database: test_dev
+
+production:
+  database: test_prod
+  clients:
+    default:
+      database: test_prod
+      hosts: 
+        - localhost:27017
+
