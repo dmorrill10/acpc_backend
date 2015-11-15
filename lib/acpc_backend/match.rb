@@ -5,6 +5,7 @@ require 'acpc_poker_types/game_definition'
 require 'acpc_poker_types/match_state'
 
 require_relative 'match_slice'
+require_relative 'config'
 
 module TimeRefinement
   refine Time.class() do

@@ -40,10 +40,19 @@ module AcpcBackend
     def initialize(file_path, interpolation_hash)
       @file = file_path
       JSON.parse(File.read(file_path)).each do |constant, val|
+        instance_variable_set("@#{constant}".to_sym, ::AcpcBackend.interpolate_all_strings(val, interpolation_hash))
         define_singleton_method(constant.to_sym) do
-          ::AcpcBackend.interpolate_all_strings(val, interpolation_hash)
+          instance_variable_get("@#{constant}".to_sym)
         end
       end
+    end
+
+    # @return [Array<Class>] Returns only the names that correspond to bot runner
+    #   classes as those classes.
+    def bots(game_def_key, *player_names)
+      player_names.map do |name|
+        @games[game_def_key]['opponents'][name]
+      end.reject { |elem| elem.nil? }
     end
   end
 

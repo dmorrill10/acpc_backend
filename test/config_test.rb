@@ -104,4 +104,16 @@ describe AcpcBackend do
     AcpcBackend.exhibition_config.rejoin_button_id.must_equal "rejoin"
     AcpcBackend.exhibition_config.spectate_button_id_prefix.must_equal "spectate-"
   end
+
+  describe 'ExhibitionConfig#bots' do
+    it 'works properly' do
+      AcpcBackend.load_config! config_data, pwd
+      AcpcBackend.exhibition_config.bots('two_player_limit', 'ExamplePlayer', 'NotPlayer').must_equal [
+        {
+          'runner' => AcpcDealer::EXAMPLE_PLAYERS[2][:limit],
+          'requires_special_port' => true
+        }
+      ]
+    end
+  end
 end
