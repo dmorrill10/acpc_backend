@@ -12,8 +12,6 @@ module AcpcBackend
     def method_missing(*args, &block) self end
   end
   module HandleException
-    extend SimpleLogging
-
     protected
 
     # @param [String] match_id The ID of the match in which the exception occurred.
@@ -35,6 +33,7 @@ module AcpcBackend
 
   class Maintainer
     include ParamRetrieval
+    include SimpleLogging
     include HandleException
 
     def start_players!(key, match)
@@ -257,6 +256,7 @@ module AcpcBackend
 
   class StatefulWorker
     include ParamRetrieval
+    include SimpleLogging
     include HandleException
     include SidekiqClientMiddlewareWithStatefulMaintainer
 
