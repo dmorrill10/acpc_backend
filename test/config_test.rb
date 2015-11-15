@@ -64,7 +64,6 @@ describe AcpcBackend do
         'file' => File.join(AcpcDealer::DEALER_DIRECTORY, 'holdem.2p.reverse_blinds.game'),
         'label' => "Heads-up Limit Texas Hold'em",
         'max_num_matches' => 2,
-        'exhibition_bot_names' => ["Tester"],
         'num_hands_per_match' => 100,
         'num_players' => 2,
         'opponents' => {
@@ -80,7 +79,6 @@ describe AcpcBackend do
         'file' => File.join(AcpcDealer::DEALER_DIRECTORY, 'holdem.nolimit.2p.reverse_blinds.game'),
         'label' => "Heads-up No-limit Texas Hold'em",
         'max_num_matches' => 2,
-        'exhibition_bot_names' => ["Tester"],
         'num_players' => 2,
         'num_hands_per_match' => 100,
         'opponents' => {
@@ -96,7 +94,6 @@ describe AcpcBackend do
         'file' => File.join(AcpcDealer::DEALER_DIRECTORY, 'kuhn.limit.3p.game'),
         'label' => "3-player Kuhn",
         'max_num_matches' => 2,
-        'exhibition_bot_names' => ["Opponent1", "Opponent2"],
         'num_players' => 3,
         'num_hands_per_match' => 3000
       }

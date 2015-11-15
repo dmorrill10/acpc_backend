@@ -1,7 +1,6 @@
 require 'socket'
 require 'json'
 require 'mongoid'
-require 'moped'
 require 'rusen'
 require 'contextual_exceptions'
 require 'acpc_dealer'
@@ -107,12 +106,9 @@ module AcpcBackend
       interpolation_hash
     )
 
-    # Mongoid
     Mongoid.logger = Logger.from_file_name(File.join(@@config.log_directory, 'mongoid.log'))
-    Moped.logger = Logger.from_file_name(File.join(@@config.log_directory, 'moped.log'))
     Mongoid.load!(config['mongoid_config'], config['mongoid_env'].to_sym)
 
-    # Rusen
     if config['error_report']
       Rusen.settings.sender_address = config['error_report']['sender']
       Rusen.settings.exception_recipients = config['error_report']['recipients']
@@ -126,7 +122,7 @@ module AcpcBackend
     @@is_initialized = true
   end
 
-  def self.load!(config_file)
+  def self.load!(config_file_path)
     load_config! YAML.load_file(config_file_path), File.dirname(config_file_path)
   end
 

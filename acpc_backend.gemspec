@@ -26,7 +26,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency "sidekiq"
 
   # For persistence
-  spec.add_dependency "mongoid", '~> 5.0.0'
+  spec.add_dependency 'origin', '~>1.0'
+  spec.add_dependency 'moped', '~>1.4'
+  spec.add_dependency "mongoid", '~> 3.1'
 
   # For poker logic
   spec.add_dependency "acpc_poker_types"
