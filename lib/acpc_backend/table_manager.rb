@@ -48,7 +48,7 @@ module AcpcBackend
       @logger = logger_
 
       @table_queues = {}
-      ExhibitionConstants::GAMES.each do |game_definition_key, info|
+      ::AcpcBackend.exhibition_config.games.each do |game_definition_key, info|
         @table_queues[game_definition_key] = TableQueue.new(game_definition_key)
         # Enqueue matches that are waiting
         @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
@@ -73,7 +73,7 @@ module AcpcBackend
       log(__method__, {started_maintenance_thread: true})
       loop do
         log_with maintenance_logger, __method__, msg: "Going to sleep"
-        sleep MAINTENANCE_INTERVAL_S
+        sleep AcpcBackend.config.maintenance_interval_s
         log_with maintenance_logger, __method__, msg: "Starting maintenance"
 
         begin
@@ -277,7 +277,7 @@ module AcpcBackend
         case request
         # when START_MATCH_REQUEST_CODE
           # @todo Put bots in erb yaml and have them reread here
-        when DELETE_IRRELEVANT_MATCHES_REQUEST_CODE
+        when ::AcpcBackend.config.delete_irrelevant_matches_request_code
           return @maintainer.clean_up_matches!
         end
 
@@ -296,14 +296,14 @@ module AcpcBackend
 
     def do_request!(request, match_id, params)
       case request
-      when START_MATCH_REQUEST_CODE
+      when ::AcpcBackend.config.start_match_request_code
         log(__method__, {request: request, match_id: match_id, msg: 'Enqueueing match'})
 
         @maintainer.enque_match!(
           match_id,
-          retrieve_parameter_or_raise_exception(params, OPTIONS_KEY)
+          retrieve_parameter_or_raise_exception(params, ::AcpcBackend.config.options_key)
         )
-      when START_PROXY_REQUEST_CODE
+      when ::AcpcBackend.config.start_proxy_request_code
         log(
           __method__,
           request: request,
@@ -312,7 +312,7 @@ module AcpcBackend
         )
 
         @maintainer.start_proxy! match_id
-      when PLAY_ACTION_REQUEST_CODE
+      when ::AcpcBackend.config.play_action_request_code
         log(
           __method__,
           request: request,
@@ -320,8 +320,8 @@ module AcpcBackend
           msg: 'Taking action'
         )
 
-        @maintainer.play_action! match_id, retrieve_parameter_or_raise_exception(params, ACTION_KEY)
-      when KILL_MATCH
+        @maintainer.play_action! match_id, retrieve_parameter_or_raise_exception(params, ::AcpcBackend.config.action_key)
+      when ::AcpcBackend.config.kill_match
         log(
           __method__,
           request: request,
