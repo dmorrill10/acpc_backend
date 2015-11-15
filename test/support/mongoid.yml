@@ -1,6 +1,6 @@
 development:
   database: test_dev
-  clients:
+  sessions:
     default:  
       hosts: 
         - localhost:27017
@@ -8,7 +8,7 @@ development:
 
 production:
   database: test_prod
-  clients:
+  sessions:
     default:
       database: test_prod
       hosts: 
