@@ -2,6 +2,10 @@ require 'mongoid'
 
 require 'acpc_poker_types/game_definition'
 
+require_relative 'config'
+AcpcBackend.raise_if_uninitialized
+
+module AcpcBackend
 class MatchSlice
   include Mongoid::Document
 
@@ -189,4 +193,5 @@ class MatchSlice
       "#{action[0]}#{amount_to_over_round}"
     end
   end
+end
 end

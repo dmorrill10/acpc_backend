@@ -1,30 +1,20 @@
-# @todo Although my initial ideas was to make this a thread-safe table queue,
-# it seems safer and more efficient to move the lock out to the user of this
-# class.
-
-# Proxy to connect to the dealer
-require_relative '../web_application_player_proxy'
 require 'acpc_poker_types'
 require 'acpc_dealer'
 
-# For an opponent bot
-require 'process_runner'
+require_relative 'proxy'
 
-require_relative '../../../lib/database_config'
-require_relative '../../models/match'
+require_relative 'dealer'
+require_relative 'opponents'
+require_relative 'config'
+require_relative 'match'
 
-require_relative '../../../lib/simple_logging'
+require_relative 'simple_logging'
 using SimpleLogging::MessageFormatting
-
-
-require_relative 'table_manager_constants'
-require_relative 'monkey_patches'
-using TableManager::MonkeyPatches::IntegerAsProcessId
 
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
 
-module TableManager
+module AcpcBackend
   class TableQueue
     include SimpleLogging
 
@@ -32,15 +22,9 @@ module TableManager
 
     exceptions :no_port_for_dealer_available
 
-    def initialize(match_communicator_, agent_interface_, game_definition_key_)
+    def initialize(game_definition_key_, match_communicator_ = Null.new)
       @match_communicator = match_communicator_
-      @agent_interface = agent_interface_
-      @logger = Logger.from_file_name(
-        File.join(
-          ApplicationDefs::LOG_DIRECTORY,
-          'table_manager.queue.log'
-        )
-      ).with_metadata!
+      @logger = AcpcBackend.new_log 'queue.log'
       @matches_to_start = []
       @running_matches = {}
       @game_definition_key = game_definition_key_
@@ -49,7 +33,7 @@ module TableManager
         __method__,
         {
           game_definition_key: @game_definition_key,
-          max_num_matches: ExhibitionConstants::GAMES[@game_definition_key]['MAX_NUM_MATCHES']
+          max_num_matches: AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
         }
       )
 
@@ -61,7 +45,7 @@ module TableManager
 
     def start_players!(match)
       opponents = []
-      match.every_bot(DEALER_HOST) do |bot_command|
+      match.every_bot(AcpcBackend.config.dealer_host) do |bot_command|
         opponents << bot_command
       end
 
@@ -70,10 +54,10 @@ module TableManager
         raise StandardError.new("No opponents found to start for #{match.id.to_s}! Killed match.")
       end
 
-      @agent_interface.start_opponents!(opponents)
+      Opponents.start!(opponents)
       log(__method__, msg: "Opponents started for #{match.id.to_s}")
 
-      @running_matches[match.id.to_s][:proxy] = @agent_interface.start_proxy!(match) do |players_at_the_table|
+      @running_matches[match.id.to_s][:proxy] = Proxy.start!(match) do |players_at_the_table|
         @match_communicator.match_updated! match.id.to_s
       end
       self
@@ -103,8 +87,8 @@ module TableManager
     end
 
     def available_special_ports
-      if TableManager::SPECIAL_PORTS_TO_DEALER
-        TableManager::SPECIAL_PORTS_TO_DEALER - ports_in_use
+      if AcpcBackend.exhibition_config.special_ports_to_dealer
+        AcpcBackend.exhibition_config.special_ports_to_dealer - ports_in_use
       else
         []
       end
@@ -118,7 +102,7 @@ module TableManager
           match_id: match_id,
           running_matches: @running_matches.map { |r| r.first },
           game_definition_key: @game_definition_key,
-          max_num_matches: ExhibitionConstants::GAMES[@game_definition_key]['MAX_NUM_MATCHES']
+          max_num_matches: AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
         }
       )
 
@@ -131,7 +115,7 @@ module TableManager
 
       @matches_to_start << {match_id: match_id, options: dealer_options}
 
-      if @running_matches.length < ExhibitionConstants::GAMES[@game_definition_key]['MAX_NUM_MATCHES']
+      if @running_matches.length < AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
         return dequeue!
       end
 
@@ -146,7 +130,7 @@ module TableManager
 
       log __method__, {num_running_matches: @running_matches.length, num_matches_to_start: @matches_to_start.length}
 
-      if @running_matches.length < ExhibitionConstants::GAMES[@game_definition_key]['MAX_NUM_MATCHES']
+      if @running_matches.length < AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
         return dequeue!
       end
       nil
@@ -328,7 +312,7 @@ module TableManager
           :'ports_to_be_used_(zero_for_random)' => ports_to_be_used
         )
         begin
-          @running_matches[match_id][:dealer] = @agent_interface.start_dealer!(
+          @running_matches[match_id][:dealer] = Dealer.start!(
             options,
             match,
             ports_to_be_used

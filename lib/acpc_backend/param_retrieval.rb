@@ -1,9 +1,9 @@
 require_relative 'monkey_patches'
-using TableManager::MonkeyPatches::StringToEnglishExtension
+using AcpcBackend::MonkeyPatches::StringToEnglishExtension
 
-require_relative 'table_manager_constants'
+require_relative 'config'
 
-module TableManager
+module AcpcBackend
   module ParamRetrieval
     protected
 
@@ -25,7 +25,8 @@ module TableManager
     # @param [Hash<String, Object>] params Parameter hash
     # @raise (see #param)
     def retrieve_match_id_or_raise_exception(params)
-      retrieve_parameter_or_raise_exception params, MATCH_ID_KEY
+      AcpcBackend.raise_if_uninitialized
+      retrieve_parameter_or_raise_exception params, AcpcBackend.config.match_id_key
     end
   end
 end

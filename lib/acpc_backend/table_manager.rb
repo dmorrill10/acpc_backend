@@ -3,8 +3,6 @@ require 'sidekiq'
 require 'timeout'
 
 require_relative 'dealer'
-require_relative 'monkey_patches'
-using AcpcBackend::MonkeyPatches::IntegerAsProcessId
 
 require_relative 'simple_logging'
 using SimpleLogging::MessageFormatting
@@ -49,12 +47,10 @@ module AcpcBackend
 
     def initialize(logger_)
       @logger = logger_
-      @agent_interface = MatchAgentInterface.new
-      @match_communicator = Null.new
 
       @table_queues = {}
       ExhibitionConstants::GAMES.each do |game_definition_key, info|
-        @table_queues[game_definition_key] = TableQueue.new(@match_communicator, @agent_interface, game_definition_key)
+        @table_queues[game_definition_key] = TableQueue.new(game_definition_key)
         # Enqueue matches that are waiting
         @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
           match = @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options

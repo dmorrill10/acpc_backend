@@ -6,7 +6,9 @@ require 'acpc_poker_types/match_state'
 
 require_relative 'match_slice'
 require_relative 'config'
+AcpcBackend.raise_if_uninitialized
 
+module AcpcBackend
 module TimeRefinement
   refine Time.class() do
     def now_as_string
@@ -14,8 +16,10 @@ module TimeRefinement
     end
   end
 end
-using TimeRefinement
+end
+using AcpcBackend::TimeRefinement
 
+module AcpcBackend
 class Match
   include Mongoid::Document
   include Mongoid::Timestamps::Updated
@@ -32,14 +36,14 @@ class Match
   scope :with_slices, ->(has_slices) do
     where({ 'slices.0' => { '$exists' => has_slices }})
   end
-  scope :started, with_slices(true)
-  scope :not_started, with_slices(false)
+  scope :started, -> { with_slices(true) }
+  scope :not_started, -> { with_slices(false) }
   scope :with_running_status, ->(is_running) do
     where(is_running: is_running)
   end
-  scope :running, with_running_status(true)
-  scope :not_running, with_running_status(false)
-  scope :running_or_started, any_of([running.selector, started.selector])
+  scope :running, -> { with_running_status(true) }
+  scope :not_running, -> { with_running_status(false) }
+  scope :running_or_started, -> { any_of([running.selector, started.selector]) }
 
   class << self
     def id_exists?(match_id)
@@ -61,12 +65,12 @@ class Match
     def include_name
       field :name
       validates_presence_of :name
-      validates_format_of :name, without: /^\s*$/
+      validates_format_of :name, without: /\A\s*\z/
     end
     def include_name_from_user
       field :name_from_user
       validates_presence_of :name_from_user
-      validates_format_of :name_from_user, without: /^\s*$/
+      validates_format_of :name_from_user, without: /\A\s*\z/
       validates_uniqueness_of :name_from_user
     end
     def include_game_definition
@@ -90,7 +94,7 @@ class Match
     def include_user_name
       field :user_name
       validates_presence_of :user_name
-      validates_format_of :user_name, without: /^\s*$/
+      validates_format_of :user_name, without: /\A\s*\z/
     end
 
     # Generators
@@ -126,7 +130,7 @@ class Match
       game_definition_key: :two_player_limit,
       port_numbers: []
     )
-      Match.new(
+      new(
         name_from_user: new_name(user_name),
         user_name: user_name,
         port_numbers: port_numbers,
@@ -181,11 +185,11 @@ class Match
   def every_bot(dealer_host)
     raise unless (
       port_numbers.length == player_names.length ||
-      bot_opponent_ports.length == ApplicationDefs.bots(game_definition_key, opponent_names).length
+      bot_opponent_ports.length == ::AcpcBackend.exhibition_config.bots(game_definition_key, *opponent_names).length
     )
 
     bot_opponent_ports.zip(
-      ApplicationDefs.bots(game_definition_key, opponent_names)
+      ::AcpcBackend.exhibition_config.bots(game_definition_key, *opponent_names)
     ).each do |port_num, bot|
       if bot[:runner].is_a?(Class)
         bot_argument_hash = {
@@ -304,7 +308,7 @@ class Match
     opponent_names.dup.insert seat-1, self.user_name
   end
   def bot_special_port_requirements
-    ApplicationDefs.bots(game_definition_key, opponent_names).map do |bot|
+    ::AcpcBackend.exhibition_config.bots(game_definition_key, *opponent_names).map do |bot|
       bot[:requires_special_port]
     end
   end
@@ -340,7 +344,8 @@ class Match
     (
       opponent_seats(user_name) -
       # Remove seats already taken by players who have already joined this match
-      Match.where(name: self.name).ne(name_from_user: self.name).map { |m| m.seat }
+      self.class().where(name: self.name).ne(name_from_user: self.name).map { |m| m.seat }
     )
   end
+end
 end
