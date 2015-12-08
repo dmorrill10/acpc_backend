@@ -22,9 +22,6 @@ Gem::Specification.new do |spec|
   # To send emails
   spec.add_dependency "pony"
 
-  # To spawn workers
-  spec.add_dependency "sidekiq"
-
   # For persistence
   spec.add_dependency 'origin', '~>1.0'
   spec.add_dependency 'moped', '~>1.4'
@@ -43,7 +40,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'timeout'
 
-  # For better errors in WAPP
+  # For better errors
   spec.add_dependency 'contextual_exceptions'
 
   # For better logging
@@ -53,4 +50,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "mocha"
+  spec.add_development_dependency "pry"
 end

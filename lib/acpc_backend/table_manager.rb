@@ -1,5 +1,3 @@
-require 'thread'
-require 'sidekiq'
 require 'timeout'
 
 require_relative 'dealer'
@@ -231,34 +229,10 @@ module AcpcBackend
     end
   end
 
-  class Worker
-    include Sidekiq::Worker
-    sidekiq_options retry: false, backtrace: false
-
-    attr_accessor :maintainer
-
-    def perform(request)
-      @maintainer.maintain! unless @maintainer.maintaining?
-    end
-  end
-
-  module SidekiqClientMiddlewareWithStatefulMaintainer
-    def call(worker, msg, queue, redis_pool = nil)
-      log __method__, msg: msg
-      if msg['args'].first == MAINTAIN_COMMAND
-        worker.maintainer = @maintainer
-        yield
-      else
-        perform *msg['args']
-      end
-    end
-  end
-
-  class StatefulWorker
+  class TableManager
     include ParamRetrieval
     include SimpleLogging
     include HandleException
-    include SidekiqClientMiddlewareWithStatefulMaintainer
 
     attr_accessor :maintainer
 
@@ -268,8 +242,9 @@ module AcpcBackend
       @maintainer = Maintainer.new @logger
     end
 
-    # Called by Rails controller through Sidekiq
     def perform(request, params=nil)
+      ap({request: request, params: params})
+      return
       match_id = nil
       begin
         log(__method__, {request: request, params: params})
@@ -331,22 +306,6 @@ module AcpcBackend
         @maintainer.kill_match! match_id
       else
         raise StandardError.new("Unrecognized request: #{request}")
-      end
-    end
-  end
-
-  class Factory
-    @instance = nil
-    def initialize
-      @instance ||= StatefulWorker.new
-    end
-    def new() @instance end
-  end
-
-  def self.configure_middleware
-    Sidekiq.configure_server do |config|
-      config.server_middleware do |chain|
-        chain.add Factory.new
       end
     end
   end
