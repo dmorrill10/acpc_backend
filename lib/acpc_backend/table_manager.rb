@@ -55,65 +55,48 @@ module AcpcBackend
         end
       end
 
-      @syncer = Mutex.new
-
-      @is_maintaining = false
-
       log(__method__)
     end
 
-    def maintaining?() @is_maintaining end
-
     def maintain!
-      @is_maintaining = true
-      maintenance_logger = AcpcBackend.new_log 'maintenance.log'
+      log __method__, msg: "Starting maintenance"
 
-      log(__method__, {started_maintenance_thread: true})
-      loop do
-        log_with maintenance_logger, __method__, msg: "Going to sleep"
-        sleep AcpcBackend.config.maintenance_interval_s
-        log_with maintenance_logger, __method__, msg: "Starting maintenance"
-
-        begin
-          started_match = {}
-          do_update_match_queue = false
-          @syncer.synchronize do
-            @table_queues.each do |key, queue|
-              if (
-                queue.change_in_number_of_running_matches? do
-                  started_match[key] = queue.check_queue!
-                end
-              )
-                do_update_match_queue = true
+      begin
+        started_match = {}
+        do_update_match_queue = false
+        @syncer.synchronize do
+          @table_queues.each do |key, queue|
+            if (
+              queue.change_in_number_of_running_matches? do
+                started_match[key] = queue.check_queue!
               end
+            )
+              do_update_match_queue = true
             end
           end
-          started_match.each { |key, match| start_players! key, match }
-          if do_update_match_queue
-            @match_communicator.update_match_queue!
-          end
-          clean_up_matches!
-        rescue => e
-          @is_maintaining = false
-          handle_exception nil, e
-          Rusen.notify e # Send an email notification
         end
-        log_with maintenance_logger, __method__, msg: "Finished maintenance"
+        started_match.each { |key, match| start_players! key, match }
+        if do_update_match_queue
+          @match_communicator.update_match_queue!
+        end
+        clean_up_matches!
+      rescue => e
+        handle_exception nil, e
+        Rusen.notify e # Send an email notification
       end
+      log __method__, msg: "Finished maintenance"
     end
 
     def kill_match!(match_id)
       log(__method__, match_id: match_id)
 
-      @syncer.synchronize do
-        @table_queues.each do |key, queue|
-          if (
-            queue.change_in_number_of_running_matches? do
-              queue.kill_match!(match_id)
-            end
-          )
-            @match_communicator.update_match_queue!
+      @table_queues.each do |key, queue|
+        if (
+          queue.change_in_number_of_running_matches? do
+            queue.kill_match!(match_id)
           end
+        )
+          @match_communicator.update_match_queue!
         end
       end
     end
@@ -130,14 +113,12 @@ module AcpcBackend
       else
         started_match = {}
         do_update_match_queue = false
-        @syncer.synchronize do
-          if (
-            @table_queues[m.game_definition_key.to_s].change_in_number_of_running_matches? do
-              started_match[m.game_definition_key.to_s] = @table_queues[m.game_definition_key.to_s].enqueue!(match_id, options)
-            end
-          )
-            do_update_match_queue = true
+        if (
+          @table_queues[m.game_definition_key.to_s].change_in_number_of_running_matches? do
+            started_match[m.game_definition_key.to_s] = @table_queues[m.game_definition_key.to_s].enqueue!(match_id, options)
           end
+        )
+          do_update_match_queue = true
         end
         started_match.each { |key, match| start_players! key, match }
         if do_update_match_queue
@@ -242,7 +223,7 @@ module AcpcBackend
       @maintainer = Maintainer.new @logger
     end
 
-    def perform(request, params=nil)
+    def perform!(request, params=nil)
       ap({request: request, params: params})
       return
       match_id = nil
