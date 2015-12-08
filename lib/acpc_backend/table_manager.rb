@@ -27,8 +27,6 @@ module AcpcBackend
     end
   end
 
-  MAINTAIN_COMMAND = 'maintain'
-
   class Maintainer
     include ParamRetrieval
     include SimpleLogging
