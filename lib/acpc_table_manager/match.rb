@@ -7,7 +7,7 @@ require 'acpc_poker_types/match_state'
 require_relative 'match_slice'
 require_relative 'config'
 
-module AcpcBackend
+module AcpcTableManager
 module TimeRefinement
   refine Time.class() do
     def now_as_string
@@ -16,14 +16,14 @@ module TimeRefinement
   end
 end
 end
-using AcpcBackend::TimeRefinement
+using AcpcTableManager::TimeRefinement
 
-module AcpcBackend
+module AcpcTableManager
 class Match
   include Mongoid::Document
   include Mongoid::Timestamps::Updated
 
-  embeds_many :slices, class_name: "MatchSlice"
+  embeds_many :slices, class_name: "AcpcTableManager::MatchSlice"
 
   # Scopes
   scope :old, ->(lifespan) do
@@ -181,29 +181,29 @@ class Match
   include_seat
 
 
-  def every_bot(dealer_host)
+  def bots(dealer_host)
+    bot_info_from_config_that_match_opponents = ::AcpcTableManager.exhibition_config.bots(game_definition_key, *opponent_names)
+    bot_opponent_ports = opponent_ports_with_condition do |name|
+      bot_info_from_config_that_match_opponents.keys.include? name
+    end
+
     raise unless (
       port_numbers.length == player_names.length ||
-      bot_opponent_ports.length == ::AcpcBackend.exhibition_config.bots(game_definition_key, *opponent_names).length
+      bot_opponent_ports.length == bot_info_from_config_that_match_opponents.length
     )
 
     bot_opponent_ports.zip(
-      ::AcpcBackend.exhibition_config.bots(game_definition_key, *opponent_names)
-    ).each do |port_num, bot|
-      if bot[:runner].is_a?(Class)
-        bot_argument_hash = {
-          port_number: port_num,
-          server: dealer_host,
-          game_def: game_definition_file_name
-        }
-
-        yield bot[:runner].run_command(bot_argument_hash).split(' ')
-      else # bot is a script that takes a host name and port in that order
-        yield [bot[:runner], dealer_host, port_num]
-      end
+      bot_info_from_config_that_match_opponents.keys,
+      bot_info_from_config_that_match_opponents.values
+    ).reduce({}) do |map, args|
+      port_num, name, info = args
+      map[name] = {
+        runner: (if info['runner'] then info['runner'] else info end),
+        host: dealer_host, port: port_num
+      }
+      map
     end
   end
-
 
   # Initializers
   def set_name!(name_ = self.name_from_user)
@@ -213,13 +213,13 @@ class Match
     self
   end
   def set_seat!(seat_ = self.seat)
-    self.seat = seat_ || self.class().new_random_seat(game_info[:num_players])
-    if self.seat > game_info[:num_players]
-      self.seat = game_info[:num_players]
+    self.seat = seat_ || self.class().new_random_seat(game_info['num_players'])
+    if self.seat > game_info['num_players']
+      self.seat = game_info['num_players']
     end
     self
   end
-  def set_game_definition_file_name!(file_name = game_info[:file])
+  def set_game_definition_file_name!(file_name = game_info['file'])
     self.game_definition_file_name = file_name
     self
   end
@@ -228,7 +228,7 @@ class Match
   end
   def finish_starting!
     set_name!.set_seat!.set_game_definition_file_name!.set_game_definition_hash!
-    self.opponent_names ||= self.class().default_opponent_names(game_info[:num_players])
+    self.opponent_names ||= self.class().default_opponent_names(game_info['num_players'])
     self.number_of_hands ||= 1
     save!
     self
@@ -258,10 +258,10 @@ class Match
 
   # Convenience accessors
   def game_info
-    @game_info ||= ApplicationDefs.game_definitions[self.game_definition_key]
+    @game_info ||= AcpcTableManager.exhibition_config.games[self.game_definition_key.to_s]
   end
   # @todo Why am I storing the file name if I want to get it from the key anyway?
-  def game_def_file_name_from_key() game_info[:file] end
+  def game_def_file_name_from_key() game_info['file'] end
   def game_def_hash_from_key()
     @game_def_hash_from_key ||= AcpcPokerTypes::GameDefinition.parse_file(game_def_file_name_from_key).to_h
   end
@@ -307,8 +307,8 @@ class Match
     opponent_names.dup.insert seat-1, self.user_name
   end
   def bot_special_port_requirements
-    ::AcpcBackend.exhibition_config.bots(game_definition_key, *opponent_names).map do |bot|
-      bot[:requires_special_port]
+    ::AcpcTableManager.exhibition_config.bots(game_definition_key, *opponent_names).values.map do |bot|
+      bot['requires_special_port']
     end
   end
   def users_port

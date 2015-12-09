@@ -1,17 +1,17 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'acpc_backend/version'
+require 'acpc_table_manager/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "acpc_backend"
-  spec.version       = AcpcBackend::VERSION
+  spec.name          = "acpc_table_manager"
+  spec.version       = AcpcTableManager::VERSION
   spec.authors       = ["Dustin Morrill"]
   spec.email         = ["dmorrill10@gmail.com"]
 
   spec.summary       = %q{Backend components to the ACPC Poker GUI Client}
   spec.description   = %q{Backend components to the ACPC Poker GUI Client. Includes a player that saves states from the dealer to persistent storage, and components to start, stop, and manage match components.}
-  spec.homepage      = "https://github.com/dmorrill10/acpc_backend"
+  spec.homepage      = "https://github.com/dmorrill10/acpc_table_manager"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
@@ -27,12 +27,15 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'moped', '~>1.4'
   spec.add_dependency "mongoid", '~> 3.1'
 
+  # For message passing
+  spec.add_dependency 'redis', '~> 3.2'
+
   # For poker logic
   spec.add_dependency "acpc_poker_types"
   spec.add_dependency 'acpc_dealer', '~> 2.0'
   spec.add_dependency 'acpc_poker_player_proxy', '~> 1.1'
 
-  # sSimple exception email notifications
+  # Simple exception email notifications
   spec.add_dependency 'rusen'
 
   # To run processes asynchronously

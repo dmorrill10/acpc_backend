@@ -10,7 +10,7 @@ using ContextualExceptions::ClassRefinement
 
 require_relative 'match'
 
-module AcpcBackend
+module AcpcTableManager
 class MatchView < SimpleDelegator
   include AcpcPokerTypes
 

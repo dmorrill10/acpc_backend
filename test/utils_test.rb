@@ -1,22 +1,22 @@
 require 'support/spec_helper'
 
-require 'acpc_backend/utils'
+require 'acpc_table_manager/utils'
 
-describe AcpcBackend do
+describe AcpcTableManager do
   describe '#resolve_path' do
     it 'converts a path relative to this file to an absolute path' do
-      AcpcBackend.resolve_path('test_file', __FILE__).must_equal File.expand_path('test_file', __FILE__)
+      AcpcTableManager.resolve_path('test_file', __FILE__).must_equal File.expand_path('test_file', __FILE__)
     end
   end
   describe '#interpolate_all_strings' do
     it 'interpolates a string' do
-      AcpcBackend.interpolate_all_strings(
+      AcpcTableManager.interpolate_all_strings(
         '%{pwd}/test_file',
         { pwd: File.dirname(__FILE__) }
       ).must_equal File.expand_path('../test_file', __FILE__)
     end
     it 'interpolates a shallow array' do
-      AcpcBackend.interpolate_all_strings(
+      AcpcTableManager.interpolate_all_strings(
         [
           '%{pwd}/test_file',
           '%{pwd}/test_file2'
@@ -30,7 +30,7 @@ describe AcpcBackend do
       )
     end
     it 'interpolates a shallow hash' do
-      AcpcBackend.interpolate_all_strings(
+      AcpcTableManager.interpolate_all_strings(
         {
           a: '%{pwd}/test_file',
           b: '%{pwd}/test_file2'
@@ -44,7 +44,7 @@ describe AcpcBackend do
       )
     end
     it 'interpolates a deep hash' do
-      AcpcBackend.interpolate_all_strings(
+      AcpcTableManager.interpolate_all_strings(
         {
           a: {
             a2: '%{pwd}/test_file',
@@ -66,7 +66,7 @@ describe AcpcBackend do
       )
     end
     it 'interpolates a deep hash with a deep array' do
-      AcpcBackend.interpolate_all_strings(
+      AcpcTableManager.interpolate_all_strings(
         {
           a: {
             a2: '%{pwd}/test_file',

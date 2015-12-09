@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+
+require 'acpc_table_manager'
+require 'redis'
+require 'json'
+require 'optparse'
+
+if __FILE__ == $0
+  options = {}
+  DEFAULT_ENV = 'default'
+  OptionParser.new do |opts|
+    opts.banner = "Usage: #{__FILE__} [options]"
+
+    opts.on("-h", "--help", "Show this message") do
+      puts opts
+      exit
+    end
+
+    opts.on("-t", "--table_manager TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
+      options[:table_manager_config] = File.expand_path c, Dir.pwd
+    end
+    opts.on("-r", "--redis REDIS CONFIG", "Redis configuration file.") do |c|
+      options[:redis_config] = File.expand_path c, Dir.pwd
+    end
+    options[:environment_mode] = DEFAULT_ENV
+    opts.on("-e", "--env [ENVIRONMENT MODE]", "The environment mode to run in, such as 'development', 'production', or 'default'. Defaults to '#{DEFAULT_ENV}'.") do |e|
+      options[:environment_mode] = e if e && !e.empty?
+    end
+  end.parse!
+
+  REDIS_CONFIG = YAML.load(options[:redis_config]).symbolize_keys
+  DFLT = REDIS_CONFIG[:default].symbolize_keys
+  redis = Redis.new(
+    if REDIS_CONFIG[APP_ENV_LABEL.to_sym]
+      DFLT.merge(REDIS_CONFIG[APP_ENV_LABEL.to_sym].symbolize_keys)
+    else
+      DFLT
+    end
+  )
+
+  CONFIG_FILE = options[:table_manager_config]
+
+  AcpcTableManager.load! CONFIG_FILE
+  table_manager = AcpcTableManager::TableManager.new
+  loop do
+    message = redis.blpop("backend", :timeout => AcpcTableManager.config.maintenance_interval_s)
+    if message
+      data = JSON.parse message[1]
+      if data['request'] == 'reload'
+        AcpcTableManager.load! CONFIG_FILE
+      else
+        table_manager.perform! data['request'], data['params']
+      end
+    else
+      table_manager.maintain!
+    end
+  end
+end

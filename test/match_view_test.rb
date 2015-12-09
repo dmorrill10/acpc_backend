@@ -3,8 +3,8 @@ require_relative 'support/spec_helper'
 require 'acpc_poker_types/match_state'
 require 'acpc_poker_types/game_definition'
 require 'acpc_poker_types/hand'
-require_relative '../lib/acpc_backend/config'
-require_relative '../lib/acpc_backend/match_view'
+require_relative '../lib/acpc_table_manager/config'
+require_relative '../lib/acpc_table_manager/match_view'
 
 module MapWithIndex
   refine Array do
@@ -21,7 +21,7 @@ end
 using MapWithIndex
 
 include AcpcPokerTypes
-include AcpcBackend
+include AcpcTableManager
 
 describe MatchView do
   let (:match_id) { 'match ID' }

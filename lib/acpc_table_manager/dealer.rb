@@ -6,7 +6,7 @@ require_relative 'match'
 
 require_relative 'simple_logging'
 
-module AcpcBackend
+module AcpcTableManager
 module Dealer
   extend SimpleLogging
 
@@ -15,8 +15,8 @@ module Dealer
   # @return [Hash<Symbol, Object>] The dealer information
   # @note Saves the actual port numbers used by the dealer instance in +match+
   def self.start(options, match, port_numbers: nil)
-    @logger ||= ::AcpcBackend.new_log 'dealer.log'
-    log __method__, options: options
+    @logger ||= ::AcpcTableManager.new_log 'dealer.log'
+    log __method__, options: options, match: match
 
     dealer_arguments = {
       match_name: Shellwords.escape(match.name.gsub(/\s+/, '_')),
@@ -30,15 +30,15 @@ module Dealer
     log __method__, {
       match_id: match.id,
       dealer_arguments: dealer_arguments,
-      log_directory: ::AcpcBackend::MATCH_LOG_DIRECTORY,
-      port_numbers: port_numbers
+      log_directory: ::AcpcTableManager.config.match_log_directory,
+      port_numbers: port_numbers,
+      command: AcpcDealer::DealerRunner.command(dealer_arguments, port_numbers)
     }
 
-    # Start the dealer
     dealer_info = Timeout::timeout(3) do
       AcpcDealer::DealerRunner.start(
         dealer_arguments,
-        ::AcpcBackend::MATCH_LOG_DIRECTORY,
+        ::AcpcTableManager.config.match_log_directory,
         port_numbers
       )
     end

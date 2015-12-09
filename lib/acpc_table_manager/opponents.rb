@@ -3,7 +3,7 @@ require 'process_runner'
 require_relative 'config'
 require_relative 'simple_logging'
 
-module AcpcBackend
+module AcpcTableManager
 module Opponents
   extend SimpleLogging
 
@@ -11,7 +11,7 @@ module Opponents
 
   # @return [Array<Integer>] PIDs of the opponents started
   def self.start(*bot_start_commands)
-    @logger ||= ::AcpcBackend.new_log 'opponents.log'
+    @logger ||= ::AcpcTableManager.new_log 'opponents.log'
     log __method__, num_opponents: bot_start_commands.length
 
     bot_start_commands.map do |bot_start_command|

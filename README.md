@@ -1,4 +1,4 @@
-# AcpcBackend
+# AcpcTableManager
 
 Must be able to accomplish the following tasks:
 
@@ -26,7 +26,7 @@ Everything else must be done sequentially.
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'acpc_backend'
+gem 'acpc_table_manager'
 ```
 
 And then execute:
@@ -35,7 +35,7 @@ And then execute:
 
 Or install it yourself as:
 
-    $ gem install acpc_backend
+    $ gem install acpc_table_manager
 
 ## Usage
 
@@ -49,7 +49,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/acpc_backend.
+Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/acpc_table_manager.
 
 
 ## License

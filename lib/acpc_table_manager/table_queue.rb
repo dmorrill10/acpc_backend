@@ -14,7 +14,7 @@ using SimpleLogging::MessageFormatting
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
 
-module AcpcBackend
+module AcpcTableManager
   class TableQueue
     include SimpleLogging
 
@@ -22,9 +22,8 @@ module AcpcBackend
 
     exceptions :no_port_for_dealer_available
 
-    def initialize(game_definition_key_, match_communicator_ = Null.new)
-      @match_communicator = match_communicator_
-      @logger = AcpcBackend.new_log 'queue.log'
+    def initialize(game_definition_key_)
+      @logger = AcpcTableManager.new_log 'queue.log'
       @matches_to_start = []
       @running_matches = {}
       @game_definition_key = game_definition_key_
@@ -33,7 +32,7 @@ module AcpcBackend
         __method__,
         {
           game_definition_key: @game_definition_key,
-          max_num_matches: AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
+          max_num_matches: AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
         }
       )
 
@@ -44,23 +43,25 @@ module AcpcBackend
     end
 
     def start_players!(match)
-      opponents = []
-      match.every_bot(AcpcBackend.config.dealer_host) do |bot_command|
-        opponents << bot_command
-      end
+      opponents = match.bots(AcpcTableManager.config.dealer_host)
 
       if opponents.empty?
         kill_match! match.id.to_s
         raise StandardError.new("No opponents found to start for #{match.id.to_s}! Killed match.")
       end
 
-      Opponents.start!(opponents)
+      Opponents.start(
+        *opponents.map { |name, info| [info[:runner], info[:host], info[:port]] }
+      )
       log(__method__, msg: "Opponents started for #{match.id.to_s}")
 
-      @running_matches[match.id.to_s][:proxy] = Proxy.start!(match) do |players_at_the_table|
-        @match_communicator.match_updated! match.id.to_s
-      end
+      start_proxy match
       self
+    end
+
+    def start_proxy(match)
+      log(__method__, msg: "Starting proxy for #{match.id.to_s}")
+      @running_matches[match.id.to_s][:proxy] = Proxy.start(match)
     end
 
     def my_matches
@@ -87,8 +88,8 @@ module AcpcBackend
     end
 
     def available_special_ports
-      if AcpcBackend.exhibition_config.special_ports_to_dealer
-        AcpcBackend.exhibition_config.special_ports_to_dealer - ports_in_use
+      if AcpcTableManager.exhibition_config.special_ports_to_dealer
+        AcpcTableManager.exhibition_config.special_ports_to_dealer - ports_in_use
       else
         []
       end
@@ -102,7 +103,7 @@ module AcpcBackend
           match_id: match_id,
           running_matches: @running_matches.map { |r| r.first },
           game_definition_key: @game_definition_key,
-          max_num_matches: AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
+          max_num_matches: AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
         }
       )
 
@@ -115,11 +116,7 @@ module AcpcBackend
 
       @matches_to_start << {match_id: match_id, options: dealer_options}
 
-      if @running_matches.length < AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
-        return dequeue!
-      end
-
-      nil
+      check_queue!
     end
 
     # @return (@see #dequeue!)
@@ -130,10 +127,11 @@ module AcpcBackend
 
       log __method__, {num_running_matches: @running_matches.length, num_matches_to_start: @matches_to_start.length}
 
-      if @running_matches.length < AcpcBackend.exhibition_config.games[@game_definition_key]['max_num_matches']
-        return dequeue!
+      if @running_matches.length < AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
+        dequeue!
+      else
+        nil
       end
-      nil
     end
 
     # @todo Shouldn't be necessary, so this method isn't called right now, but I've written it so I'll leave it for now
@@ -169,6 +167,13 @@ module AcpcBackend
       log __method__, match_id: match_id, msg: 'Match successfully killed'
     end
 
+    def force_kill_match!(match_id)
+      log __method__, match_id: match_id
+      kill_match! match_id
+      ::AcpcTableManager::Match.delete_match! match_id
+      log __method__, match_id: match_id, msg: 'Match successfully deleted'
+    end
+
     protected
 
     def kill_dealer!(dealer_info)
@@ -180,7 +185,7 @@ module AcpcBackend
       )
 
       if AcpcDealer::dealer_running? dealer_info
-        dealer_info[:pid].kill_process
+        AcpcDealer.kill_process dealer_info[:pid]
 
         sleep 1 # Give the dealer a chance to exit
 
@@ -192,7 +197,7 @@ module AcpcBackend
         )
 
         if AcpcDealer::dealer_running?(dealer_info)
-          dealer_info[:pid].force_kill_process
+          AcpcDealer.force_kill_process dealer_info[:pid]
           sleep 1
 
           log(
@@ -254,8 +259,7 @@ module AcpcBackend
     end
 
     # @return [Object] The match that has been started or +nil+ if none could
-    # be started. Note that players have
-    # yet to be started, so the caller must do this.
+    # be started.
     def dequeue!
       log(
         __method__,
@@ -312,25 +316,45 @@ module AcpcBackend
           :'ports_to_be_used_(zero_for_random)' => ports_to_be_used
         )
         begin
-          @running_matches[match_id][:dealer] = Dealer.start!(
+          @running_matches[match_id][:dealer] = Dealer.start(
             options,
             match,
-            ports_to_be_used
+            port_numbers: ports_to_be_used
           )
-        rescue Timeout::Error
+        rescue Timeout::Error => e
+          log(
+            __method__,
+            {warning: "The dealer for match #{match_id} timed out."},
+            Logger::Severity::WARN
+          )
           begin
             ports_to_be_used = special_port_requirements.map do |r|
               if r then port(available_ports_) else 0 end
             end
           rescue NoPortForDealerAvailable => e
-            if num_repetitions < 1
-              sleep 1
-              num_repetitions += 1
-              available_ports_ = available_special_ports
-            else
-              kill_match! match_id
-              raise e
-            end
+            available_ports_ = available_special_ports
+            log(
+              __method__,
+              {warning: "#{ports_to_be_used} ports unavailable, retrying with all special ports, #{available_ports_}."},
+              Logger::Severity::WARN
+            )
+          end
+          if num_repetitions < 1
+            sleep 1
+            log(
+              __method__,
+              {warning: "Retrying with all special ports, #{available_ports_}."},
+              Logger::Severity::WARN
+            )
+            num_repetitions += 1
+          else
+            log(
+              __method__,
+              {warning: "Unable to start match after retry, force killing match."},
+              Logger::Severity::ERROR
+            )
+            force_kill_match! match_id
+            raise e
           end
         end
       end
@@ -348,7 +372,7 @@ module AcpcBackend
         ports: match.port_numbers
       )
 
-      match
+      start_players! match
     end
   end
 end

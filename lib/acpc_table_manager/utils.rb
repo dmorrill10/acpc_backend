@@ -1,6 +1,6 @@
 require 'pathname'
 
-module AcpcBackend
+module AcpcTableManager
   def self.each_key_value_pair(collection)
     # @todo I can't believe this is necessary...
     if collection.is_a?(Array)

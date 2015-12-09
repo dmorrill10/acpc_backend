@@ -4,7 +4,7 @@ require 'acpc_poker_types/game_definition'
 
 require_relative 'config'
 
-module AcpcBackend
+module AcpcTableManager
 class MatchSlice
   include Mongoid::Document
 

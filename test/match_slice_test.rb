@@ -5,8 +5,8 @@ require 'acpc_poker_types/game_definition'
 require 'acpc_poker_types/hand'
 require 'acpc_poker_types/players_at_the_table'
 
-require_relative '../lib/acpc_backend/config'
-require_relative '../lib/acpc_backend/match_slice'
+require_relative '../lib/acpc_table_manager/config'
+require_relative '../lib/acpc_table_manager/match_slice'
 
 module MapWithIndex
   refine Array do
@@ -23,7 +23,7 @@ end
 using MapWithIndex
 
 include AcpcPokerTypes
-include AcpcBackend
+include AcpcTableManager
 
 describe MatchSlice do
   def patient

@@ -1,11 +1,10 @@
-require 'timeout'
-
 require_relative 'dealer'
+require_relative 'match'
 
 require_relative 'simple_logging'
 using SimpleLogging::MessageFormatting
 
-module AcpcBackend
+module AcpcTableManager
   class Null
     def method_missing(*args, &block) self end
   end
@@ -32,51 +31,34 @@ module AcpcBackend
     include SimpleLogging
     include HandleException
 
-    def start_players!(key, match)
-      if match
-        Timeout::timeout(MAX_TIME_TO_WAIT_FOR_PLAYERS_TO_START_S) do
-          @table_queues[key].start_players! match
-        end
-      end
-    end
-
     def initialize(logger_)
       @logger = logger_
 
       @table_queues = {}
-      ::AcpcBackend.exhibition_config.games.each do |game_definition_key, info|
-        @table_queues[game_definition_key] = TableQueue.new(game_definition_key)
-        # Enqueue matches that are waiting
-        @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
-          match = @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options
-          start_players! game_definition_key, match
-        end
-      end
+      enqueue_waiting_matches
 
       log(__method__)
+    end
+
+    def enqueue_waiting_matches(game_definition_key=nil)
+      if game_definition_key
+        @table_queues[game_definition_key] ||= ::AcpcTableManager::TableQueue.new(game_definition_key)
+        @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
+          @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options
+        end
+      else
+        ::AcpcTableManager.exhibition_config.games.keys.each do |game_definition_key|
+          enqueue_waiting_matches game_definition_key
+        end
+      end
     end
 
     def maintain!
       log __method__, msg: "Starting maintenance"
 
       begin
-        started_match = {}
-        do_update_match_queue = false
-        @syncer.synchronize do
-          @table_queues.each do |key, queue|
-            if (
-              queue.change_in_number_of_running_matches? do
-                started_match[key] = queue.check_queue!
-              end
-            )
-              do_update_match_queue = true
-            end
-          end
-        end
-        started_match.each { |key, match| start_players! key, match }
-        if do_update_match_queue
-          @match_communicator.update_match_queue!
-        end
+        enqueue_waiting_matches
+        @table_queues.each { |key, queue| queue.check_queue! }
         clean_up_matches!
       rescue => e
         handle_exception nil, e
@@ -89,51 +71,31 @@ module AcpcBackend
       log(__method__, match_id: match_id)
 
       @table_queues.each do |key, queue|
-        if (
-          queue.change_in_number_of_running_matches? do
-            queue.kill_match!(match_id)
-          end
-        )
-          @match_communicator.update_match_queue!
-        end
+        queue.kill_match!(match_id)
       end
     end
 
     def clean_up_matches!
-      Match.delete_matches_older_than! 1.day
+      ::AcpcTableManager::Match.delete_matches_older_than! 1.day
     end
 
-    def enque_match!(match_id, options)
+    def enqueue_match!(match_id, options)
       begin
-        m = Match.find match_id
+        m = ::AcpcTableManager::Match.find match_id
       rescue Mongoid::Errors::DocumentNotFound
         return kill_match!(match_id)
       else
-        started_match = {}
-        do_update_match_queue = false
-        if (
-          @table_queues[m.game_definition_key.to_s].change_in_number_of_running_matches? do
-            started_match[m.game_definition_key.to_s] = @table_queues[m.game_definition_key.to_s].enqueue!(match_id, options)
-          end
-        )
-          do_update_match_queue = true
-        end
-        started_match.each { |key, match| start_players! key, match }
-        if do_update_match_queue
-          @match_communicator.update_match_queue!
-        end
+        @table_queues[m.game_definition_key.to_s].enqueue! match_id, options
       end
     end
 
     def start_proxy!(match_id)
       begin
-        match = Match.find match_id
+        match = ::AcpcTableManager::Match.find match_id
       rescue Mongoid::Errors::DocumentNotFound
         return kill_match!(match_id)
       else
-        @agent_interface.start_proxy!(match) do |players_at_the_table|
-          @match_communicator.match_updated! match_id.to_s
-        end
+        @table_queues[match.game_definition_key.to_s].start_proxy match
       end
     end
 
@@ -143,7 +105,7 @@ module AcpcBackend
         action: action
       }
       begin
-        match = Match.find match_id
+        match = ::AcpcTableManager::Match.find match_id
       rescue Mongoid::Errors::DocumentNotFound
         log(
           __method__,
@@ -179,7 +141,9 @@ module AcpcBackend
         running?: !@table_queues[match.game_definition_key.to_s].running_matches[match_id].nil?
       }
       proxy = @table_queues[match.game_definition_key.to_s].running_matches[match_id][:proxy]
-      unless proxy
+      if proxy
+        proxy.play! action
+      else
         log(
           __method__,
           {
@@ -194,17 +158,8 @@ module AcpcBackend
           },
           Logger::Severity::ERROR
         )
-        return kill_match!(match_id)
       end
-
-      @agent_interface.play!(action, match, proxy) do |players_at_the_table|
-        @match_communicator.match_updated! match_id
-        if players_at_the_table.match_state.first_state_of_first_round?
-          @match_communicator.update_match_queue!
-        end
-      end
-
-      kill_match!(match_id) if proxy.match_ended?
+      kill_match!(match_id) if proxy.nil? || proxy.match_ended?
     end
   end
 
@@ -216,14 +171,28 @@ module AcpcBackend
     attr_accessor :maintainer
 
     def initialize
-      @logger = AcpcBackend.new_log 'table_manager.log'
+      @logger = AcpcTableManager.new_log 'table_manager.log'
       log __method__, "Starting new #{self.class()}"
       @maintainer = Maintainer.new @logger
     end
 
+    def maintain!
+      begin
+        @maintainer.maintain!
+      rescue => e
+        log(
+          __method__,
+          {
+            message: e.message,
+            backtrace: e.backtrace
+          },
+          Logger::Severity::ERROR
+        )
+        Rusen.notify e # Send an email notification
+      end
+    end
+
     def perform!(request, params=nil)
-      ap({request: request, params: params})
-      return
       match_id = nil
       begin
         log(__method__, {request: request, params: params})
@@ -231,7 +200,7 @@ module AcpcBackend
         case request
         # when START_MATCH_REQUEST_CODE
           # @todo Put bots in erb yaml and have them reread here
-        when ::AcpcBackend.config.delete_irrelevant_matches_request_code
+        when ::AcpcTableManager.config.delete_irrelevant_matches_request_code
           return @maintainer.clean_up_matches!
         end
 
@@ -250,14 +219,14 @@ module AcpcBackend
 
     def do_request!(request, match_id, params)
       case request
-      when ::AcpcBackend.config.start_match_request_code
+      when ::AcpcTableManager.config.start_match_request_code
         log(__method__, {request: request, match_id: match_id, msg: 'Enqueueing match'})
 
-        @maintainer.enque_match!(
+        @maintainer.enqueue_match!(
           match_id,
-          retrieve_parameter_or_raise_exception(params, ::AcpcBackend.config.options_key)
+          retrieve_parameter_or_raise_exception(params, ::AcpcTableManager.config.options_key)
         )
-      when ::AcpcBackend.config.start_proxy_request_code
+      when ::AcpcTableManager.config.start_proxy_request_code
         log(
           __method__,
           request: request,
@@ -266,7 +235,7 @@ module AcpcBackend
         )
 
         @maintainer.start_proxy! match_id
-      when ::AcpcBackend.config.play_action_request_code
+      when ::AcpcTableManager.config.play_action_request_code
         log(
           __method__,
           request: request,
@@ -274,8 +243,8 @@ module AcpcBackend
           msg: 'Taking action'
         )
 
-        @maintainer.play_action! match_id, retrieve_parameter_or_raise_exception(params, ::AcpcBackend.config.action_key)
-      when ::AcpcBackend.config.kill_match
+        @maintainer.play_action! match_id, retrieve_parameter_or_raise_exception(params, ::AcpcTableManager.config.action_key)
+      when ::AcpcTableManager.config.kill_match
         log(
           __method__,
           request: request,

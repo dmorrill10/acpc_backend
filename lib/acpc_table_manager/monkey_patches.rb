@@ -1,4 +1,4 @@
-module AcpcBackend
+module AcpcTableManager
   module MonkeyPatches
     module ConversionToEnglish
       def to_english

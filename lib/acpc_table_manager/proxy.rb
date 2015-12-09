@@ -11,7 +11,7 @@ using SimpleLogging::MessageFormatting
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
 
-module AcpcBackend
+module AcpcTableManager
 
 class Proxy
   include SimpleLogging
@@ -19,7 +19,7 @@ class Proxy
 
   exceptions :unable_to_create_match_slice
 
-  def self.start!(match)
+  def self.start(match)
     game_definition = GameDefinition.parse_file(match.game_definition_file_name)
     match.game_def_hash = game_definition.to_h
     match.save!
@@ -28,7 +28,7 @@ class Proxy
       match.id,
       AcpcDealer::ConnectionInformation.new(
         match.port_numbers[match.seat - 1],
-        ::AcpcBackend::DEALER_HOST
+        ::AcpcTableManager.config.dealer_host
       ),
       match.seat - 1,
       game_definition,
@@ -54,7 +54,7 @@ class Proxy
     player_names='user p2',
     number_of_hands=1
   )
-    @logger = AcpcBackend.new_logger File.join('proxies', "#{match_id}.#{users_seat}.log")
+    @logger = AcpcTableManager.new_log File.join('proxies', "#{match_id}.#{users_seat}.log")
 
     log __method__, {
       dealer_information: dealer_information,
