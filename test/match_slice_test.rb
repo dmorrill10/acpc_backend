@@ -379,7 +379,7 @@ describe MatchSlice do
         string << "#{hand}#{MatchState::HAND_SEPARATOR}"
       end[0..-2]
 
-      (0..game_def.number_of_players-1).each do |position|
+      game_def.number_of_players.times do |position|
         [
           [''],
           ['c', 'cr30', 'cr30r100', 'cr30r100c', 'cr30r100cc/'],

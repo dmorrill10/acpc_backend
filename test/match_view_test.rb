@@ -82,69 +82,117 @@ describe MatchView do
     end
   end
   describe '#pot_fraction_wager_to' do
-    it 'provides the pot wager to amount without an argument' do
-      wager_size = 10
-      game_def = GameDefinition.new(
-        first_player_positions: [0, 0, 0],
-        chip_stacks: [5000, 6000, 5500],
-        blinds: [0, 5, 10],
+    let (:wager_size) { 10 }
+    let (:first_player_positions) { [0, 0, 0] }
+    let (:game_def) {
+      GameDefinition.new(
+        first_player_positions: first_player_positions,
+        chip_stacks: chip_stacks,
+        blinds: blinds,
         raise_sizes: [wager_size]*3,
         number_of_ranks: 3
       )
-
-      x_pot_fraction_wager_to = [
-        [15 + 10 + 10],
-        [
-          30 + 10,
-          70 + 30,
-          30 + 100 + 100 + 100,
-          300 + 100,
-          300
-        ],
-        [300]*3,
-        [
-          100 * 3, # after 'cr30r100cc/ccc/c'
-          110 * 2 + 100 + 10, # after 'cr30r100cc/ccc/cr110'
-          130 * 2 + 110 + 30, # after 'cr30r100cc/ccc/cr110r130'
-          160 * 2 + 130 + 60, # after 'cr30r100cc/ccc/cr110r130r160'
-          160 * 3 + 60 # after 'cr30r100cc/ccc/cr110r130r160c'
-        ]
-      ]
-
-      hands = game_def.number_of_players.times.map { |i| Hand.new }
-
-      hand_string = hands.inject('') do |string, hand|
+    }
+    let (:hands) { game_def.number_of_players.times.map { |i| Hand.new } }
+    let (:hand_string) {
+      hands.inject('') do |string, hand|
         string << "#{hand}#{MatchState::HAND_SEPARATOR}"
       end[0..-2]
+    }
 
-      (0..game_def.number_of_players-1).each do |position|
-        [
-          [''],
-          ['c', 'cr30', 'cr30r100', 'cr30r100c', 'cr30r100cc/'],
-          ['cr30r100cc/c', 'cr30r100cc/cc', 'cr30r100cc/ccc/'],
-          [
-            'cr30r100cc/ccc/c',
-            'cr30r100cc/ccc/cr110',
-            'cr30r100cc/ccc/cr110r130',
-            'cr30r100cc/ccc/cr110r130r160',
-            'cr30r100cc/ccc/cr110r130r160c'
-          ]
-        ].each_with_index do |betting_sequence_list, i|
-          betting_sequence_list.each_with_index do |betting_sequence, j|
-            match_state = MatchState.parse(
-              "#{MatchState::LABEL}:#{position}:0:#{betting_sequence}:#{hand_string}"
-            )
-            slice.stubs(:hand_ended?).returns(false)
-            slice.stubs(:pot_after_call).returns(MatchSlice.pot_after_call(match_state, game_def))
-            slice.stubs(:minimum_wager_to).returns(MatchSlice.minimum_wager_to(match_state, game_def))
-            slice.stubs(:chip_contribution_after_calling).returns(
-              MatchSlice.chip_contribution_after_calling(match_state, game_def)
-            )
-            slice.stubs(:all_in).returns(MatchSlice.all_in(match_state, game_def))
-            x_match.stubs(:slices).returns([slice])
+    describe 'provides the pot wager to amount without an argument' do
+      let (:evaluate_patient) {
+        game_def.number_of_players.times do |position|
+          betting_sequence_test_cases.each_with_index do |betting_sequence_list, i|
+            betting_sequence_list.each_with_index do |betting_sequence, j|
+              match_state = MatchState.parse(
+                "#{MatchState::LABEL}:#{position}:0:#{betting_sequence}:#{hand_string}"
+              )
+              slice.stubs(:hand_ended?).returns(false)
+              slice.stubs(:pot_after_call).returns(MatchSlice.pot_after_call(match_state, game_def))
+              slice.stubs(:minimum_wager_to).returns(MatchSlice.minimum_wager_to(match_state, game_def))
+              slice.stubs(:chip_contribution_after_calling).returns(
+                MatchSlice.chip_contribution_after_calling(match_state, game_def)
+              )
+              slice.stubs(:all_in).returns(MatchSlice.all_in(match_state, game_def))
+              x_match.stubs(:slices).returns([slice])
 
-            new_patient.pot_fraction_wager_to.must_equal x_pot_fraction_wager_to[i][j]
+              new_patient.pot_fraction_wager_to.must_equal x_pot_fraction_wager_to[i][j]
+            end
           end
+        end
+      }
+
+      describe 'in a three player game' do
+        let (:chip_stacks) { [5000, 6000, 5500] }
+        let (:blinds) { [0, 5, 10] }
+        let (:x_pot_fraction_wager_to) {
+          [
+            [
+              15 + # Current pot size
+              10 + # pot size after call
+              10   # Contribution after calling
+            ],
+            [
+              30 + 10,
+              70 + 30,
+              30 + 100 + 100 + 100,
+              300 + 100,
+              300
+            ],
+            [300]*3,
+            [
+              100 * 3, # after 'cr30r100cc/ccc/c'
+              110 * 2 + 100 + 10, # after 'cr30r100cc/ccc/cr110'
+              130 * 2 + 110 + 30, # after 'cr30r100cc/ccc/cr110r130'
+              160 * 2 + 130 + 60, # after 'cr30r100cc/ccc/cr110r130r160'
+              160 * 3 + 60 # after 'cr30r100cc/ccc/cr110r130r160c'
+            ]
+          ]
+        }
+        let (:betting_sequence_test_cases) {
+          [
+            [''],
+            ['c', 'cr30', 'cr30r100', 'cr30r100c', 'cr30r100cc/'],
+            ['cr30r100cc/c', 'cr30r100cc/cc', 'cr30r100cc/ccc/'],
+            [
+              'cr30r100cc/ccc/c',
+              'cr30r100cc/ccc/cr110',
+              'cr30r100cc/ccc/cr110r130',
+              'cr30r100cc/ccc/cr110r130r160',
+              'cr30r100cc/ccc/cr110r130r160c'
+            ]
+          ]
+        }
+        it 'works' do
+          evaluate_patient
+        end
+      end
+      describe 'in a two player game' do
+        let (:chip_stacks) { [5000, 6000] }
+        let (:blinds) { [1, 2] }
+        let (:wager_size) { 2 }
+        let (:x_pot_fraction_wager_to) {
+          [
+            [
+              3 + # Current pot size
+              1 + # Pot size after call
+              2,  # My Contribution after calling
+              (
+                4 + # Opponent contribution
+                4   # My contribution after calling
+              ) + # Pot size after call
+              4   # My contribution after calling
+            ]
+          ]
+        }
+        let (:betting_sequence_test_cases) {
+          [
+            ['', 'r4']
+          ]
+        }
+        it 'works' do
+          evaluate_patient
         end
       end
     end
