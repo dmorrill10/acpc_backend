@@ -6,12 +6,13 @@ require 'json'
 require 'optparse'
 
 if __FILE__ == $0
+  ARGV << '-h' if ARGV.empty?
+
   options = {}
-  DEFAULT_ENV = 'default'
   OptionParser.new do |opts|
     opts.banner = "Usage: #{__FILE__} [options]"
 
-    opts.on("-h", "--help", "Show this message") do
+    opts.on_tail("-h", "--help", "Show this message") do
       puts opts
       exit
     end
@@ -22,17 +23,22 @@ if __FILE__ == $0
     opts.on("-r", "--redis REDIS CONFIG", "Redis configuration file.") do |c|
       options[:redis_config] = File.expand_path c, Dir.pwd
     end
-    options[:environment_mode] = DEFAULT_ENV
-    opts.on("-e", "--env [ENVIRONMENT MODE]", "The environment mode to run in, such as 'development', 'production', or 'default'. Defaults to '#{DEFAULT_ENV}'.") do |e|
+    opts.on("-e", "--env [ENVIRONMENT MODE]", "The environment mode to run in, such as 'development' or 'production'.") do |e|
       options[:environment_mode] = e if e && !e.empty?
     end
   end.parse!
 
+  raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
+  raise OptionParser::MissingArgument.new('REDIS CONFIG') unless options[:redis_config]
+
+  raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
+  raise OptionParser::ArgumentError.new("#{options[:redis_config]} doesn't exist.") unless File.exist?(options[:redis_config])
+
   REDIS_CONFIG = YAML.load(options[:redis_config]).symbolize_keys
   DFLT = REDIS_CONFIG[:default].symbolize_keys
   redis = Redis.new(
-    if REDIS_CONFIG[APP_ENV_LABEL.to_sym]
-      DFLT.merge(REDIS_CONFIG[APP_ENV_LABEL.to_sym].symbolize_keys)
+    if options[:environment_mode] && REDIS_CONFIG[options[:environment_mode].to_sym]
+      DFLT.merge(REDIS_CONFIG[options[:environment_mode].to_sym].symbolize_keys)
     else
       DFLT
     end

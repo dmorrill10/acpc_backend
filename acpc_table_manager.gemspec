@@ -41,8 +41,6 @@ Gem::Specification.new do |spec|
   # To run processes asynchronously
   spec.add_dependency 'process_runner', '~> 0.0'
 
-  spec.add_dependency 'timeout'
-
   # For better errors
   spec.add_dependency 'contextual_exceptions'
 

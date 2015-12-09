@@ -1,5 +1,6 @@
 require 'acpc_poker_types'
 require 'acpc_dealer'
+require 'timeout'
 
 require_relative 'proxy'
 
