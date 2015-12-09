@@ -5,60 +5,59 @@ require 'redis'
 require 'json'
 require 'optparse'
 
-if __FILE__ == $0
-  ARGV << '-h' if ARGV.empty?
 
-  options = {}
-  OptionParser.new do |opts|
-    opts.banner = "Usage: #{__FILE__} [options]"
+ARGV << '-h' if ARGV.empty?
 
-    opts.on_tail("-h", "--help", "Show this message") do
-      puts opts
-      exit
-    end
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$0} [options]"
 
-    opts.on("-t", "--table_manager TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
-      options[:table_manager_config] = File.expand_path c, Dir.pwd
-    end
-    opts.on("-r", "--redis REDIS CONFIG", "Redis configuration file.") do |c|
-      options[:redis_config] = File.expand_path c, Dir.pwd
-    end
-    opts.on("-e", "--env [ENVIRONMENT MODE]", "The environment mode to run in, such as 'development' or 'production'.") do |e|
-      options[:environment_mode] = e if e && !e.empty?
-    end
-  end.parse!
+  opts.on_tail("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
 
-  raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
-  raise OptionParser::MissingArgument.new('REDIS CONFIG') unless options[:redis_config]
+  opts.on("-t", "--table_manager TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
+    options[:table_manager_config] = File.expand_path c, Dir.pwd
+  end
+  opts.on("-r", "--redis REDIS CONFIG", "Redis configuration file.") do |c|
+    options[:redis_config] = File.expand_path c, Dir.pwd
+  end
+  opts.on("-e", "--env [ENVIRONMENT MODE]", "The environment mode to run in, such as 'development' or 'production'.") do |e|
+    options[:environment_mode] = e if e && !e.empty?
+  end
+end.parse!
 
-  raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
-  raise OptionParser::ArgumentError.new("#{options[:redis_config]} doesn't exist.") unless File.exist?(options[:redis_config])
+raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
+raise OptionParser::MissingArgument.new('REDIS CONFIG') unless options[:redis_config]
 
-  REDIS_CONFIG = YAML.load(options[:redis_config]).symbolize_keys
-  DFLT = REDIS_CONFIG[:default].symbolize_keys
-  redis = Redis.new(
-    if options[:environment_mode] && REDIS_CONFIG[options[:environment_mode].to_sym]
-      DFLT.merge(REDIS_CONFIG[options[:environment_mode].to_sym].symbolize_keys)
+raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
+raise OptionParser::ArgumentError.new("#{options[:redis_config]} doesn't exist.") unless File.exist?(options[:redis_config])
+
+REDIS_CONFIG = YAML.load_file(options[:redis_config]).symbolize_keys
+DFLT = REDIS_CONFIG[:default].symbolize_keys
+redis = Redis.new(
+  if options[:environment_mode] && REDIS_CONFIG[options[:environment_mode].to_sym]
+    DFLT.merge(REDIS_CONFIG[options[:environment_mode].to_sym].symbolize_keys)
+  else
+    DFLT
+  end
+)
+
+CONFIG_FILE = options[:table_manager_config]
+
+AcpcTableManager.load! CONFIG_FILE
+table_manager = AcpcTableManager::TableManager.new
+loop do
+  message = redis.blpop("backend", :timeout => AcpcTableManager.config.maintenance_interval_s)
+  if message
+    data = JSON.parse message[1]
+    if data['request'] == 'reload'
+      AcpcTableManager.load! CONFIG_FILE
     else
-      DFLT
+      table_manager.perform! data['request'], data['params']
     end
-  )
-
-  CONFIG_FILE = options[:table_manager_config]
-
-  AcpcTableManager.load! CONFIG_FILE
-  table_manager = AcpcTableManager::TableManager.new
-  loop do
-    message = redis.blpop("backend", :timeout => AcpcTableManager.config.maintenance_interval_s)
-    if message
-      data = JSON.parse message[1]
-      if data['request'] == 'reload'
-        AcpcTableManager.load! CONFIG_FILE
-      else
-        table_manager.perform! data['request'], data['params']
-      end
-    else
-      table_manager.maintain!
-    end
+  else
+    table_manager.maintain!
   end
 end
