@@ -152,7 +152,7 @@ module AcpcTableManager
       Rusen.settings.sender_address = config['error_report']['sender']
       Rusen.settings.exception_recipients = config['error_report']['recipients']
 
-      Rusen.settings.outputs = config['error_report']['outputs'] || [:email]
+      Rusen.settings.outputs = config['error_report']['outputs'] || [:pony]
       Rusen.settings.sections = config['error_report']['sections'] || [:backtrace]
       Rusen.settings.email_prefix = config['error_report']['email_prefix'] || '[ERROR] '
       Rusen.settings.smtp_settings = config['error_report']['smtp']
