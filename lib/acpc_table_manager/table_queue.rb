@@ -78,7 +78,7 @@ module AcpcTableManager
         __method__,
         {
           msg: "Started proxy for #{match.id.to_s}",
-          pid: pid
+          pid: @running_matches[match.id.to_s][:proxy]
         }
       )
     end
