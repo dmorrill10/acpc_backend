@@ -283,15 +283,17 @@ module AcpcTableManager
     def kill_matches!
       log __method__
 
-      Match.running.and.old(AcpcTableManager.config.match_lifespan_s).each do |m|
-        log(
-          __method__,
-          {
-            old_running_match_id_being_killed: m.id.to_s
-          }
-        )
+      unless AcpcTableManager.config.match_lifespan_s < 0
+        Match.running.and.old(AcpcTableManager.config.match_lifespan_s).each do |m|
+          log(
+            __method__,
+            {
+              old_running_match_id_being_killed: m.id.to_s
+            }
+          )
 
-        kill_match! m.id.to_s
+          kill_match! m.id.to_s
+        end
       end
 
       running_matches_array = @running_matches.to_a
