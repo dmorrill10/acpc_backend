@@ -21,7 +21,9 @@ module AcpcTableManager
       if game_definition_key
         @table_queues[game_definition_key] ||= ::AcpcTableManager::TableQueue.new(game_definition_key)
         @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
-          @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options
+          unless @table_queues[game_definition_key].running_matches[m.id.to_s]
+            @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options
+          end
         end
       else
         ::AcpcTableManager.exhibition_config.games.keys.each do |game_definition_key|
