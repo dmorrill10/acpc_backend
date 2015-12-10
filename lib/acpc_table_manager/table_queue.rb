@@ -59,7 +59,7 @@ module AcpcTableManager
     end
 
     def start_proxy(match)
-      command = "acpc_proxy -t #{AcpcTableManager.config_file} -m #{match.id.to_s}"
+      command = "bundle exec acpc_proxy -t #{AcpcTableManager.config_file} -m #{match.id.to_s}"
       log(
         __method__,
         {

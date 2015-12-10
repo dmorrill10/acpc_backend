@@ -69,16 +69,15 @@ begin
       exit
     end
   end
-  rescue => e
-    proxy.log(
-      __method__,
-      {
-        match_id: options[:match_id],
-        message: e.message,
-        backtrace: e.backtrace
-      },
-      Logger::Severity::ERROR
-    )
-    Rusen.notify e # Send an email notification
-  end
+rescue => e
+  proxy.log(
+    __method__,
+    {
+      match_id: options[:match_id],
+      message: e.message,
+      backtrace: e.backtrace
+    },
+    Logger::Severity::ERROR
+  )
+  Rusen.notify e # Send an email notification
 end
