@@ -6,7 +6,7 @@ require 'acpc_poker_player_proxy'
 require 'acpc_poker_types'
 
 require_relative 'simple_logging'
-using SimpleLogging::MessageFormatting
+using AcpcTableManager::SimpleLogging::MessageFormatting
 
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
@@ -109,7 +109,11 @@ class Proxy
   def match_ended?
     return false if @player_proxy.nil?
 
-    @match ||= Match.find(@match_id)
+    @match ||= begin
+      Match.find(@match_id)
+    rescue Mongoid::Errors::DocumentNotFound
+      return true
+    end
 
     @player_proxy.match_ended? ||
     (

@@ -2,8 +2,6 @@ require 'awesome_print'
 require 'logger'
 require 'fileutils'
 
-# @todo Move to its own gem the next time I find I need easier logging faculties
-
 class Logger
   # Defaults correspond to Logger#new defaults
   def self.from_file_name(file_name, shift_age = 0, shift_size = 1048576)
@@ -20,6 +18,7 @@ class Logger
   end
 end
 
+module AcpcTableManager
 module SimpleLogging
   module MessageFormatting
     refine Logger do
@@ -51,4 +50,5 @@ module SimpleLogging
   def log(method, variables = nil, msg_type = Logger::Severity::INFO)
     log_with(logger, method, variables, msg_type)
   end
+end
 end

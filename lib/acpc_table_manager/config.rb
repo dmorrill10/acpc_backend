@@ -4,9 +4,10 @@ require 'mongoid'
 require 'rusen'
 require 'contextual_exceptions'
 require 'acpc_dealer'
+require 'redis'
 
 require_relative 'simple_logging'
-using SimpleLogging::MessageFormatting
+using AcpcTableManager::SimpleLogging::MessageFormatting
 
 require_relative 'utils'
 
@@ -114,6 +115,15 @@ module AcpcTableManager
 
   @@is_initialized = false
 
+  @@redis_config_file = nil
+  def self.redis_config_file() @@redis_config_file end
+
+  @@redis = nil
+  def self.redis() @@redis end
+
+  @@config_file = nil
+  def self.config_file() @@config_file end
+
   def self.load_config!(config_data, yaml_directory = File.pwd)
     interpolation_hash = {
       pwd: yaml_directory,
@@ -150,10 +160,24 @@ module AcpcTableManager
       @@config.log(__method__, {warning: "Email reporting disabled. Please set email configuration to enable this feature."}, Logger::Severity::WARN)
     end
 
+    if config['redis_config_file']
+      @@redis_config_file = config['redis_config_file']
+      redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
+      dflt = redis_config[:default].symbolize_keys
+      @@redis = Redis.new(
+        if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
+          dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
+        else
+          dflt
+        end
+      )
+    end
+
     @@is_initialized = true
   end
 
   def self.load!(config_file_path)
+    @@config_file = config_file_path
     load_config! YAML.load_file(config_file_path), File.dirname(config_file_path)
   end
 

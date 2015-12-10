@@ -2,15 +2,13 @@ require 'acpc_poker_types'
 require 'acpc_dealer'
 require 'timeout'
 
-require_relative 'proxy'
-
 require_relative 'dealer'
 require_relative 'opponents'
 require_relative 'config'
 require_relative 'match'
 
 require_relative 'simple_logging'
-using SimpleLogging::MessageFormatting
+using AcpcTableManager::SimpleLogging::MessageFormatting
 
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
@@ -61,8 +59,28 @@ module AcpcTableManager
     end
 
     def start_proxy(match)
-      log(__method__, msg: "Starting proxy for #{match.id.to_s}")
-      @running_matches[match.id.to_s][:proxy] = Proxy.start(match)
+      command = "acpc_proxy -t #{AcpcTableManager.config_file} -m #{match.id.to_s}"
+      log(
+        __method__,
+        {
+          msg: "Starting proxy for #{match.id.to_s}",
+          command: command
+        }
+      )
+
+      @running_matches[match.id.to_s][:proxy] = Timeout::timeout(3) do
+        pid = Process.spawn(command)
+        Process.detach(pid)
+        pid
+      end
+
+      log(
+        __method__,
+        {
+          msg: "Started proxy for #{match.id.to_s}",
+          pid: pid
+        }
+      )
     end
 
     def my_matches
@@ -164,6 +182,7 @@ module AcpcTableManager
       @matches_to_start.delete_if { |m| m[:match_id] == match_id }
 
       kill_dealer!(match_info[:dealer]) if match_info && match_info[:dealer]
+      kill_proxy!(match_info[:proxy]) if match_info && match_info[:proxy]
 
       log __method__, match_id: match_id, msg: 'Match successfully killed'
     end
@@ -212,6 +231,48 @@ module AcpcTableManager
             raise(
               StandardError.new(
                 "Dealer process #{dealer_info[:pid]} couldn't be killed!"
+              )
+            )
+          end
+        end
+      end
+    end
+
+    def kill_proxy!(proxy_pid)
+      log(
+        __method__,
+        pid: proxy_pid,
+        was_running?: true,
+        proxy_running?: AcpcDealer::process_exists?(proxy_pid)
+      )
+
+      if proxy_pid && AcpcDealer::process_exists?(proxy_pid)
+        AcpcDealer.kill_process proxy_pid
+
+        sleep 1 # Give the proxy a chance to exit
+
+        log(
+          __method__,
+          pid: proxy_pid,
+          msg: 'After TERM signal',
+          proxy_still_running?: AcpcDealer::process_exists?(proxy_pid)
+        )
+
+        if AcpcDealer::process_exists?(proxy_pid)
+          AcpcDealer.force_kill_process proxy_pid
+          sleep 1
+
+          log(
+            __method__,
+            pid: proxy_pid,
+            msg: 'After KILL signal',
+            proxy_still_running?: AcpcDealer::process_exists?(proxy_pid)
+          )
+
+          if AcpcDealer::process_exists?(proxy_pid)
+            raise(
+              StandardError.new(
+                "Proxy process #{proxy_pid} couldn't be killed!"
               )
             )
           end

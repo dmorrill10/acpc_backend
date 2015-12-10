@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+
+require 'acpc_table_manager'
+require 'redis'
+require 'json'
+require 'optparse'
+require 'mongoid'
+
+ARGV << '-h' if ARGV.empty?
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{$0} [options]"
+
+  opts.on_tail("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
+
+  opts.on("-m", "--match_id MATCH ID", "The ID of the match to join.") do |c|
+    options[:match_id] = c.strip
+  end
+  opts.on("-t", "--config TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
+    options[:table_manager_config] = File.expand_path c, Dir.pwd
+  end
+end.parse!
+
+raise OptionParser::MissingArgument.new('MATCH ID') unless options[:match_id]
+raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
+
+raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
+
+CONFIG_FILE = options[:table_manager_config]
+
+AcpcTableManager.load! CONFIG_FILE
+
+match = begin
+  AcpcTableManager::Match.find options[:match_id]
+rescue Mongoid::Errors::DocumentNotFound
+  raise OptionParser::ArgumentError.new("Match \"#{options[:match_id]}\" doesn't exist.")
+end
+
+unless match.running? && !match.finished?
+  raise OptionParser::ArgumentError.new("Match \"#{options[:match_id]}\" is not running or has already finished.")
+end
+
+proxy = AcpcTableManager::Proxy.start match
+
+loop do
+  begin
+    message = AcpcTableManager.redis.blpop(
+      "play-action-in-#{options[:match_id]}",
+      :timeout => AcpcTableManager.config.maintenance_interval_s
+    )
+    if message
+      data = JSON.parse message[1]
+      proxy.play! data[AcpcTableManager.config.action_key]
+    end
+    if proxy.match_ended?
+      AcpcTableManager.redis.rpush(
+        'table-manager',
+        {
+          'request' => AcpcTableManager.config.kill_match,
+          'params' => {
+            AcpcTableManager.config.match_id_key => options[:match_id]
+          }
+        }.to_json
+      )
+      exit
+    end
+  rescue => e
+    proxy.log(
+      __method__,
+      {
+        match_id: options[:match_id],
+        message: e.message,
+        backtrace: e.backtrace
+      },
+      Logger::Severity::ERROR
+    )
+    Rusen.notify e # Send an email notification
+  end
+end

@@ -20,44 +20,50 @@ OptionParser.new do |opts|
   opts.on("-t", "--table_manager TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
     options[:table_manager_config] = File.expand_path c, Dir.pwd
   end
-  opts.on("-r", "--redis REDIS CONFIG", "Redis configuration file.") do |c|
-    options[:redis_config] = File.expand_path c, Dir.pwd
-  end
-  opts.on("-e", "--env [ENVIRONMENT MODE]", "The environment mode to run in, such as 'development' or 'production'.") do |e|
-    options[:environment_mode] = e if e && !e.empty?
-  end
 end.parse!
 
 raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
-raise OptionParser::MissingArgument.new('REDIS CONFIG') unless options[:redis_config]
 
 raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
-raise OptionParser::ArgumentError.new("#{options[:redis_config]} doesn't exist.") unless File.exist?(options[:redis_config])
-
-REDIS_CONFIG = YAML.load_file(options[:redis_config]).symbolize_keys
-DFLT = REDIS_CONFIG[:default].symbolize_keys
-redis = Redis.new(
-  if options[:environment_mode] && REDIS_CONFIG[options[:environment_mode].to_sym]
-    DFLT.merge(REDIS_CONFIG[options[:environment_mode].to_sym].symbolize_keys)
-  else
-    DFLT
-  end
-)
 
 CONFIG_FILE = options[:table_manager_config]
 
 AcpcTableManager.load! CONFIG_FILE
-table_manager = AcpcTableManager::TableManager.new
+table_manager = AcpcTableManager::Maintainer.new
 loop do
-  message = redis.blpop("backend", :timeout => AcpcTableManager.config.maintenance_interval_s)
-  if message
-    data = JSON.parse message[1]
-    if data['request'] == 'reload'
-      AcpcTableManager.load! CONFIG_FILE
+  begin
+    message = AcpcTableManager.redis.blpop("table-manager", :timeout => AcpcTableManager.config.maintenance_interval_s)
+    if message
+      data = JSON.parse message[1]
+      case data['request']
+      when AcpcTableManager.config.start_match_request_code
+        table_manager.enqueue_match!(
+          data['params'][AcpcTableManager.config.match_id_key],
+          data['params'][AcpcTableManager.config.options_key]
+        )
+      when AcpcTableManager.config.kill_match
+        table_manager.kill_match! match_id
+      when 'reload'
+        AcpcTableManager.load! CONFIG_FILE
+      when AcpcTableManager.config.check_match
+        table_manager.check_match data['params'][AcpcTableManager.config.match_id_key]
+      when AcpcTableManager.config.delete_irrelevant_matches_request_code
+        table_manager.clean_up_matches!
+      else
+        raise StandardError.new("Unrecognized request: #{data['request']}")
+      end
     else
-      table_manager.perform! data['request'], data['params']
+      table_manager.maintain!
     end
-  else
-    table_manager.maintain!
+  rescue => e
+    table_manager.log(
+      __method__,
+      {
+        message: e.message,
+        backtrace: e.backtrace
+      },
+      Logger::Severity::ERROR
+    )
+    Rusen.notify e # Send an email notification
   end
 end
