@@ -46,10 +46,10 @@ end
 
 proxy = AcpcTableManager::Proxy.start match
 
-loop do
-  begin
+begin
+  loop do
     message = AcpcTableManager.redis.blpop(
-      "play-action-in-#{options[:match_id]}",
+      "#{AcpcTableManager.config.player_action_channel_prefix}#{options[:match_id]}",
       :timeout => AcpcTableManager.config.maintenance_interval_s
     )
     if message
@@ -68,6 +68,7 @@ loop do
       )
       exit
     end
+  end
   rescue => e
     proxy.log(
       __method__,
