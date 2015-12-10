@@ -42,7 +42,7 @@ loop do
           data['params'][AcpcTableManager.config.options_key]
         )
       when AcpcTableManager.config.kill_match
-        table_manager.kill_match! match_id
+        table_manager.kill_match! data['params'][AcpcTableManager.config.match_id_key]
       when 'reload'
         AcpcTableManager.load! CONFIG_FILE
       when AcpcTableManager.config.check_match
