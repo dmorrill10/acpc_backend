@@ -47,6 +47,9 @@ Gem::Specification.new do |spec|
   # For better logging
   spec.add_dependency 'awesome_print'
 
+  # For sanitizing file names
+  spec.add_dependency 'zaru'
+
   spec.add_development_dependency "bundler", "~> 1.10"
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "minitest"

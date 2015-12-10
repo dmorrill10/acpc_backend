@@ -1,5 +1,6 @@
 require 'acpc_dealer'
 require 'timeout'
+require 'zaru'
 
 require_relative 'config'
 require_relative 'match'
@@ -19,7 +20,7 @@ module Dealer
     log __method__, options: options, match: match
 
     dealer_arguments = {
-      match_name: Shellwords.escape(match.name.gsub(/\s+/, '_')),
+      match_name: Zaru.sanitize!(Shellwords.escape(match.name.gsub(/\s+/, '_'))),
       game_def_file_name: Shellwords.escape(match.game_definition_file_name),
       hands: Shellwords.escape(match.number_of_hands),
       random_seed: Shellwords.escape(match.random_seed.to_s),
