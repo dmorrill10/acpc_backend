@@ -20,7 +20,8 @@ module AcpcTableManager
     def enqueue_waiting_matches(game_definition_key=nil)
       if game_definition_key
         @table_queues[game_definition_key] ||= ::AcpcTableManager::TableQueue.new(game_definition_key)
-        @table_queues[game_definition_key].my_matches.not_running.and.not_started.each do |m|
+        matches_to_check = @table_queues[game_definition_key].my_matches.not_running.and.not_started.to_a
+        matches_to_check.each do |m|
           unless @table_queues[game_definition_key].running_matches[m.id.to_s]
             @table_queues[game_definition_key].enqueue! m.id.to_s, m.dealer_options
           end

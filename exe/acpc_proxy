@@ -44,9 +44,8 @@ unless match.running? && !match.finished?
   raise OptionParser::ArgumentError.new("Match \"#{options[:match_id]}\" is not running or has already finished.")
 end
 
-proxy = AcpcTableManager::Proxy.start match
-
 begin
+  proxy = AcpcTableManager::Proxy.start match
   loop do
     message = AcpcTableManager.redis.blpop(
       "#{AcpcTableManager.config.player_action_channel_prefix}#{options[:match_id]}",
