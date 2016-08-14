@@ -5,7 +5,7 @@ require 'fileutils'
 class Logger
   # Defaults correspond to Logger#new defaults
   def self.from_file_name(file_name, shift_age = 0, shift_size = 1048576)
-    unless File.exists?(file_name)
+    unless File.exist?(file_name)
       FileUtils.mkdir_p File.dirname(file_name)
       FileUtils.touch file_name
     end

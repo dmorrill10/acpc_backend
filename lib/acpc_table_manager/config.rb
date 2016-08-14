@@ -1,6 +1,7 @@
 require 'socket'
 require 'json'
 require 'mongoid'
+require 'moped'
 require 'rusen'
 require 'contextual_exceptions'
 require 'acpc_dealer'
@@ -18,9 +19,9 @@ module AcpcTableManager
     THIS_MACHINE = Socket.gethostname
     DEALER_HOST = THIS_MACHINE
 
-    attr_reader :file, :log_directory, :my_log_directory, :match_log_directory
+    attr_reader :file, :log_directory, :my_log_directory, :match_log_directory, :proxy_pids_file
 
-    def initialize(file_path, log_directory_, match_log_directory_, interpolation_hash)
+    def initialize(file_path, log_directory_, match_log_directory_, proxy_pids_file_, interpolation_hash)
       @file = file_path
       JSON.parse(File.read(file_path)).each do |constant, val|
         define_singleton_method(constant.to_sym) do
@@ -30,6 +31,7 @@ module AcpcTableManager
       @log_directory = log_directory_
       @match_log_directory = match_log_directory_
       @my_log_directory = File.join(@log_directory, 'acpc_table_manager')
+      @proxy_pids_file = proxy_pids_file_
       @logger = Logger.from_file_name(File.join(@my_log_directory, 'config.log'))
     end
 
@@ -124,6 +126,9 @@ module AcpcTableManager
   @@config_file = nil
   def self.config_file() @@config_file end
 
+  @@notifier = nil
+  def self.notifier() @@notifier end
+
   def self.load_config!(config_data, yaml_directory = File.pwd)
     interpolation_hash = {
       pwd: yaml_directory,
@@ -137,6 +142,7 @@ module AcpcTableManager
       config['table_manager_constants'],
       config['log_directory'],
       config['match_log_directory'],
+      config['proxy_pids_file'],
       interpolation_hash
     )
     @@exhibition_config = ExhibitionConfig.new(
@@ -145,7 +151,11 @@ module AcpcTableManager
       Logger.from_file_name(File.join(@@config.my_log_directory, 'exhibition_config.log'))
     )
 
-    Mongoid.logger = Logger.from_file_name(File.join(@@config.log_directory, 'mongoid.log'))
+    # Moped.logger = Logger.from_file_name(File.join(@@config.log_directory, 'moped.log'))
+    # Mongoid.logger = Logger.from_file_name(File.join(@@config.log_directory, 'mongoid.log'))
+    # TODO: These should be set in configuration files
+    Moped.logger.level = ::Logger::FATAL
+    Mongoid.logger.level = ::Logger::FATAL
     Mongoid.load!(config['mongoid_config'], config['mongoid_env'].to_sym)
 
     if config['error_report']
@@ -156,6 +166,8 @@ module AcpcTableManager
       Rusen.settings.sections = config['error_report']['sections'] || [:backtrace]
       Rusen.settings.email_prefix = config['error_report']['email_prefix'] || '[ERROR] '
       Rusen.settings.smtp_settings = config['error_report']['smtp']
+
+      @@notifier = Rusen
     else
       @@config.log(__method__, {warning: "Email reporting disabled. Please set email configuration to enable this feature."}, Logger::Severity::WARN)
     end
@@ -182,7 +194,7 @@ module AcpcTableManager
   end
 
   def self.notify(exception)
-    Rusen.notify exception
+    @@notifier.notify(exception) if @@notifier
   end
 
   def self.initialized?

@@ -44,8 +44,12 @@ unless match.running? && !match.finished?
   raise OptionParser::ArgumentError.new("Match \"#{options[:match_id]}\" is not running or has already finished.")
 end
 
+Signal.trap("INT") { exit }
+Signal.trap("TERM") { exit }
+
 begin
   proxy = AcpcTableManager::Proxy.start match
+  proxy.log __method__, options
   loop do
     message = AcpcTableManager.redis.blpop(
       "#{AcpcTableManager.config.player_action_channel_prefix}#{options[:match_id]}",
@@ -78,5 +82,5 @@ rescue => e
     },
     Logger::Severity::ERROR
   )
-  Rusen.notify e # Send an email notification
+  AcpcTableManager.notify e # Send an email notification
 end

@@ -55,7 +55,6 @@ module AcpcTableManager
       log(__method__, msg: "Opponents started for #{match.id.to_s}")
 
       start_proxy match
-      self
     end
 
     def start_proxy(match)
@@ -81,6 +80,7 @@ module AcpcTableManager
           pid: @running_matches[match.id.to_s][:proxy]
         }
       )
+      @running_matches[match.id.to_s]
     end
 
     def my_matches
@@ -114,7 +114,7 @@ module AcpcTableManager
       end
     end
 
-    # @return (@see #dequeue!)
+    # @return +self+
     def enqueue!(match_id, dealer_options)
       log(
         __method__,
@@ -127,18 +127,18 @@ module AcpcTableManager
       )
 
       if @running_matches[match_id]
-        return log(
+        log(
           __method__,
           msg: "Match #{match_id} already started!"
         )
+        return self
       end
 
       @matches_to_start << {match_id: match_id, options: dealer_options}
-
-      check_queue!
+      self
     end
 
-    # @return (@see #dequeue!)
+    # @return [Array] The list of PID information about the matches that were dequeued.
     def check_queue!
       log __method__
 
@@ -146,11 +146,14 @@ module AcpcTableManager
 
       log __method__, {num_running_matches: @running_matches.length, num_matches_to_start: @matches_to_start.length}
 
-      if @running_matches.length < AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
-        dequeue!
-      else
-        nil
+      matches_started = []
+      while !@matches_to_start.empty? && @running_matches.length < AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
+        matches_started << dequeue
       end
+
+      log __method__, {matches_started: matches_started, num_running_matches: @running_matches.length, num_matches_to_start: @matches_to_start.length}
+
+      matches_started
     end
 
     # @todo Shouldn't be necessary, so this method isn't called right now, but I've written it so I'll leave it for now
@@ -338,8 +341,8 @@ module AcpcTableManager
     end
 
     # @return [Object] The match that has been started or +nil+ if none could
-    # be started.
-    def dequeue!
+    #   be started.
+    def dequeue
       log(
         __method__,
         num_matches_to_start: @matches_to_start.length
@@ -355,12 +358,12 @@ module AcpcTableManager
         begin
           match = Match.find match_id
         rescue Mongoid::Errors::DocumentNotFound
-          return self if @matches_to_start.empty?
+          return nil if @matches_to_start.empty?
         else
           break
         end
       end
-      return self unless match_id
+      return nil unless match_id
 
       options = match_info[:options]
 
@@ -452,6 +455,8 @@ module AcpcTableManager
       )
 
       start_players! match
+
+      @running_matches[match_id]
     end
   end
 end

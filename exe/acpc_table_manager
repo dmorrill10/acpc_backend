@@ -30,6 +30,10 @@ CONFIG_FILE = options[:table_manager_config]
 
 AcpcTableManager.load! CONFIG_FILE
 table_manager = AcpcTableManager::Maintainer.new
+
+Signal.trap("INT") { exit }
+Signal.trap("TERM") { exit }
+
 loop do
   begin
     message = AcpcTableManager.redis.blpop("table-manager", :timeout => AcpcTableManager.config.maintenance_interval_s)
@@ -64,6 +68,6 @@ loop do
       },
       Logger::Severity::ERROR
     )
-    Rusen.notify e # Send an email notification
+    AcpcTableManager.notify e
   end
 end
