@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   # For poker logic
   spec.add_dependency "acpc_poker_types"
   spec.add_dependency 'acpc_dealer', '~> 2.0'
-  spec.add_dependency 'acpc_poker_player_proxy', '~> 1.1'
+  spec.add_dependency 'acpc_poker_player_proxy', '~> 1.3'
 
   # Simple exception email notifications
   spec.add_dependency 'rusen'

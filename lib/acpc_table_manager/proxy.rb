@@ -19,7 +19,7 @@ class Proxy
 
   exceptions :unable_to_create_match_slice
 
-  def self.start(match)
+  def self.start(match, must_send_ready = false)
     game_definition = GameDefinition.parse_file(match.game_definition_file_name)
     match.game_def_hash = game_definition.to_h
     match.save!
@@ -33,7 +33,8 @@ class Proxy
       match.seat - 1,
       game_definition,
       match.player_names.join(' '),
-      match.number_of_hands
+      match.number_of_hands,
+      must_send_ready
     ) do |players_at_the_table|
       yield players_at_the_table if block_given?
     end
@@ -52,7 +53,8 @@ class Proxy
     users_seat,
     game_definition,
     player_names='user p2',
-    number_of_hands=1
+    number_of_hands=1,
+    must_send_ready=false
   )
     @logger = AcpcTableManager.new_log File.join('proxies', "#{match_id}.#{users_seat}.log")
 
@@ -68,7 +70,8 @@ class Proxy
     @player_proxy = AcpcPokerPlayerProxy::PlayerProxy.new(
       dealer_information,
       game_definition,
-      users_seat
+      users_seat,
+      must_send_ready
     ) do |players_at_the_table|
 
       if players_at_the_table.match_state
@@ -79,6 +82,26 @@ class Proxy
         log __method__, {before_first_match_state: true}
       end
     end
+  end
+
+  def next_hand!
+    log __method__
+
+    @player_proxy.next_hand! do |players_at_the_table|
+      update_database! players_at_the_table
+
+      yield players_at_the_table if block_given?
+    end
+
+    log(
+      __method__,
+      {
+        users_turn_to_act?: @player_proxy.users_turn_to_act?,
+        match_ended?: @player_proxy.match_ended?
+      }
+    )
+
+    self
   end
 
   # Player action interface
