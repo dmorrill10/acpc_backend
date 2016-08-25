@@ -135,13 +135,23 @@ class Proxy
     @match ||= begin
       Match.find(@match_id)
     rescue Mongoid::Errors::DocumentNotFound
+      log(
+        __method__,
+        {
+          msg: "Unable to find match",
+          match_id: @match_id,
+          match_ended: @player_proxy.match_ended?
+        }
+      )
       return true
     end
 
-    @player_proxy.match_ended? ||
     (
-      @player_proxy.hand_ended? &&
-      @player_proxy.match_state.hand_number >= @match.number_of_hands - 1
+      @player_proxy.match_ended? ||
+      (
+        @player_proxy.hand_ended? &&
+        @player_proxy.match_state.hand_number >= @match.number_of_hands - 1
+      )
     )
   end
 

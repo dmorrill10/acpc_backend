@@ -39,6 +39,8 @@ loop do
     message = AcpcTableManager.redis.blpop("table-manager", :timeout => AcpcTableManager.config.maintenance_interval_s)
     if message
       data = JSON.parse message[1]
+      table_manager.log(__method__, {data: data})
+
       case data['request']
       when AcpcTableManager.config.start_match_request_code
         table_manager.enqueue_match!(

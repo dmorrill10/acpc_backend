@@ -115,6 +115,8 @@ module AcpcTableManager
       log(__method__, match_id: match_id)
 
       @table_queues.each do |key, queue|
+        log(__method__, {queue: key, match_id: match_id})
+
         queue.kill_match!(match_id)
       end
     end
@@ -127,6 +129,16 @@ module AcpcTableManager
       begin
         m = ::AcpcTableManager::Match.find match_id
       rescue Mongoid::Errors::DocumentNotFound
+
+        log(
+          __method__,
+          {
+            msg: "Match not found",
+            match_id: match_id
+          },
+          Logger::Severity::ERROR
+        )
+
         return kill_match!(match_id)
       else
         self.class().update_pids self.class().proxy_pids_file do
@@ -140,6 +152,16 @@ module AcpcTableManager
       begin
         match = ::AcpcTableManager::Match.find match_id
       rescue Mongoid::Errors::DocumentNotFound
+
+        log(
+          __method__,
+          {
+            msg: "Match not found",
+            match_id: match_id
+          },
+          Logger::Severity::ERROR
+        )
+
         return kill_match!(match_id)
       else
         self.class().update_pids self.class().proxy_pids_file do
@@ -149,7 +171,7 @@ module AcpcTableManager
     end
 
     def check_match(match_id)
-      log(__method__, { match_id: match_id })
+      log(__method__, {match_id: match_id})
       begin
         match = ::AcpcTableManager::Match.find match_id
       rescue Mongoid::Errors::DocumentNotFound
