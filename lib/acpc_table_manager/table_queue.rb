@@ -131,10 +131,9 @@ module AcpcTableManager
           __method__,
           msg: "Match #{match_id} already started!"
         )
-        return self
+      else
+          @matches_to_start << {match_id: match_id, options: dealer_options}
       end
-
-      @matches_to_start << {match_id: match_id, options: dealer_options}
       self
     end
 

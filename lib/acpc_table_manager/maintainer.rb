@@ -100,7 +100,7 @@ module AcpcTableManager
       self.class().update_pids self.class().proxy_pids_file do
         queues_touched = enqueue_waiting_matches
         matches_started = []
-        queues_touched.each do |_, queue|
+        queues_touched.each do |queue|
           matches_started << queue.check_queue!
         end
         matches_started
