@@ -45,7 +45,7 @@ module AcpcTableManager
       opponents = match.bots(AcpcTableManager.config.dealer_host)
 
       if opponents.empty?
-        kill_match! match.id.to_s
+        force_kill_match! match.id.to_s
         raise StandardError.new("No opponents found to start for #{match.id.to_s}! Killed match.")
       end
 

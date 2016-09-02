@@ -24,27 +24,45 @@ module AcpcTableManager
       end
     end
 
+    def self.kill_process_if_running(pid)
+      begin
+        AcpcDealer::kill_process pid
+        sleep 1 # Give the process a chance to exit
+
+        if AcpcDealer::process_exists?(pid)
+          AcpcDealer::force_kill_process pid
+          sleep 1 # Give the process a chance to exit
+
+          if AcpcDealer::process_exists?(pid)
+            yield if block_given?
+          end
+        end
+      rescue Errno::ESRCH
+      end
+    end
+
     def self.kill_orphan_proxies(pids, pids_file)
       new_pids = []
       pids.each do |pid_pair|
-        if AcpcDealer::process_exists?(pid_pair['proxy']) && !AcpcDealer::process_exists?(pid_pair['dealer'])
-          AcpcDealer::kill_process pid_pair['proxy']
-          sleep 1 # Give the process a chance to exit
-
-          if AcpcDealer::process_exists?(pid_pair['proxy'])
-            AcpcDealer::force_kill_process pid_pair['proxy']
-            sleep 1 # Give the process a chance to exit
-
-            if AcpcDealer::process_exists?(pid_pair['proxy'])
-              raise(
-                StandardError.new(
-                  "Proxy process #{pid_pair['proxy']} couldn't be killed!"
-                )
+        proxy_running = AcpcDealer::process_exists?(pid_pair['proxy'])
+        if proxy_running && AcpcDealer::process_exists?(pid_pair['dealer'])
+          new_pids << pid_pair
+        elsif proxy_running
+          kill_process_if_running pid_pair['proxy'] do
+            raise(
+              StandardError.new(
+                "Proxy process #{pid_pair['proxy']} couldn't be killed!"
               )
-            end
+            )
           end
         else
-          new_pids << pid_pair
+          kill_process_if_running pid_pair['dealer'] do
+            raise(
+              StandardError.new(
+                "Dealer process #{pid_pair['dealer']} couldn't be killed!"
+              )
+            )
+          end
         end
       end
       new_pids
