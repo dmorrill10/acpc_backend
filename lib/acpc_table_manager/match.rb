@@ -114,8 +114,8 @@ class Match
       name
     end
     def new_random_seed
-      random_float = rand
-      random_int = (random_float * 10**random_float.to_s.length).to_i
+      # The ACPC dealer requires 32 bit random seeds
+      rand(2**33 - 1)
     end
     def new_random_seat(num_players)
       rand(num_players) + 1
