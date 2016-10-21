@@ -13,7 +13,12 @@ using AcpcTableManager::SimpleLogging::MessageFormatting
 require_relative 'utils'
 
 module AcpcTableManager
-  class Config
+  class NilDefaultConfig
+    def method_missing(sym, *args, &block)
+      if respond_to?(sym) then super(sym, *args, &block) else nil end
+    end
+  end
+  class Config < NilDefaultConfig
     include SimpleLogging
 
     THIS_MACHINE = Socket.gethostname
@@ -39,7 +44,7 @@ module AcpcTableManager
     def dealer_host() DEALER_HOST end
   end
 
-  class ExhibitionConfig
+  class ExhibitionConfig < NilDefaultConfig
     include SimpleLogging
 
     attr_reader :file

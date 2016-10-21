@@ -32,6 +32,12 @@ describe AcpcTableManager do
     AcpcTableManager.initialized?.must_equal true
   end
 
+  it 'it sets uninitialized values to nil' do
+    AcpcTableManager.load_config! config_data, pwd
+    AcpcTableManager.config.respond_to?(:_a).must_equal false
+    AcpcTableManager.config._a.must_equal nil
+  end
+
   it 'sets expected values upon initialization' do
     AcpcTableManager.load_config! config_data, pwd
 
