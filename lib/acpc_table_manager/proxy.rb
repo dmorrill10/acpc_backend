@@ -106,13 +106,13 @@ class Proxy
 
   # Player action interface
   # @see PlayerProxy#play!
-  def play!(action)
+  def play!(action, fast_forward = false)
     log __method__, action: action
 
     action = PokerAction.new(action) unless action.is_a?(PokerAction)
 
     @player_proxy.play! action do |players_at_the_table|
-      update_database! players_at_the_table
+      update_database! players_at_the_table, fast_forward
 
       yield players_at_the_table if block_given?
     end
@@ -140,7 +140,8 @@ class Proxy
           AcpcPokerTypes::PokerAction::FOLD
         else
           AcpcPokerTypes::PokerAction::CALL
-        end
+        end,
+        true
       )
     end
     self
@@ -175,10 +176,14 @@ class Proxy
 
   private
 
-  def update_database!(players_at_the_table)
+  def update_database!(players_at_the_table, fast_forward = false)
     @match = Match.find(@match_id)
 
     begin
+      if fast_forward
+        @match.last_slice_viewed = @match.slices.length - 1
+      end
+
       MatchSlice.from_players_at_the_table!(
         players_at_the_table,
         match_ended?,
