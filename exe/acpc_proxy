@@ -72,10 +72,10 @@ begin
       end
       last_message_received = Time.now
     elsif (
-      AcpcTableManager.config.proxy_timeout &&
+      AcpcTableManager.config.proxy_timeout_s &&
       (
         Time.now > (
-          last_message_received + AcpcTableManager.config.proxy_timeout
+          last_message_received + AcpcTableManager.config.proxy_timeout_s
         )
       )
     )
