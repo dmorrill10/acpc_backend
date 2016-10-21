@@ -49,6 +49,8 @@ Signal.trap("TERM") { exit }
 
 must_send_ready = AcpcTableManager.config.respond_to?(:next_hand_request_code)
 
+last_message_received = Time.now
+
 begin
   proxy = AcpcTableManager::Proxy.start match, must_send_ready
   proxy.log __method__, options
@@ -68,6 +70,17 @@ begin
       else
         proxy.play! action
       end
+      last_message_received = Time.now
+    elsif (
+      AcpcTableManager.config.proxy_timeout &&
+      (
+        Time.now > (
+          last_message_received + AcpcTableManager.config.proxy_timeout
+        )
+      )
+    )
+      # @todo Allow different behaviour on timeout
+      proxy.play_check_fold!
     end
     if proxy.match_ended?
       AcpcTableManager.redis.rpush(

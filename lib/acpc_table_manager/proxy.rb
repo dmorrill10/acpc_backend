@@ -128,6 +128,24 @@ class Proxy
     self
   end
 
+  def play_check_fold!
+    log __method__
+    if @player_proxy.users_turn_to_act?
+      play!(
+        if (
+          @player_proxy.legal_actions.any? do |a|
+            a == AcpcPokerTypes::PokerAction::FOLD
+          end
+        )
+          AcpcPokerTypes::PokerAction::FOLD
+        else
+          AcpcPokerTypes::PokerAction::CALL
+        end
+      )
+    end
+    self
+  end
+
   # @see PlayerProxy#match_ended?
   def match_ended?
     return false if @player_proxy.nil?
