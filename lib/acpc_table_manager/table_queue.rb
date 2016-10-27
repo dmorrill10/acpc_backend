@@ -183,7 +183,9 @@ module AcpcTableManager
       end
       @matches_to_start.delete_if { |m| m[:match_id] == match_id }
 
-      kill_dealer!(match_info[:dealer]) if match_info && match_info[:dealer]
+      if match_info && match_info[:dealer] && match_info[:proxy].nil? then
+        kill_dealer!(match_info[:dealer])
+      end
       kill_proxy!(match_info[:proxy]) if match_info && match_info[:proxy]
 
       log __method__, match_id: match_id, msg: 'Match successfully killed'
