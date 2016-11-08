@@ -7,6 +7,7 @@ require_relative 'config'
 module AcpcTableManager
 class MatchSlice
   include Mongoid::Document
+  include Mongoid::Timestamps::Updated
 
   embedded_in :match, inverse_of: :slices
 

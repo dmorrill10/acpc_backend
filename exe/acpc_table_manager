@@ -4,6 +4,7 @@ require 'acpc_table_manager'
 require 'redis'
 require 'json'
 require 'optparse'
+require 'acpc_table_manager/match'
 
 
 ARGV << '-h' if ARGV.empty?
@@ -42,25 +43,17 @@ loop do
       table_manager.log(__method__, {data: data})
 
       case data['request']
-      when AcpcTableManager.config.start_match_request_code
-        table_manager.enqueue_match!(
-          data['params'][AcpcTableManager.config.match_id_key],
-          data['params'][AcpcTableManager.config.options_key]
-        )
+      when AcpcTableManager.config.check_matches
       when AcpcTableManager.config.kill_match
-        table_manager.kill_match! data['params'][AcpcTableManager.config.match_id_key]
+        match = AcpcTableManager::Match.quiet_find data['params'][AcpcTableManager.config.match_id_key]
+        if match then match.kill_proxy! end
       when 'reload'
         AcpcTableManager.load! CONFIG_FILE
-      when AcpcTableManager.config.check_match
-        table_manager.check_match data['params'][AcpcTableManager.config.match_id_key]
-      when AcpcTableManager.config.delete_irrelevant_matches_request_code
-        table_manager.clean_up_matches!
       else
         raise StandardError.new("Unrecognized request: #{data['request']}")
       end
-    else
-      table_manager.maintain!
     end
+    table_manager.maintain!
   rescue => e
     table_manager.log(
       __method__,

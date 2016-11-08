@@ -15,21 +15,22 @@ module Dealer
 
   # @return [Hash<Symbol, Object>] The dealer information
   # @note Saves the actual port numbers used by the dealer instance in +match+
-  def self.start(options, match, port_numbers: nil)
+  def self.start(match, port_numbers: nil)
     @logger ||= ::AcpcTableManager.new_log 'dealer.log'
-    log __method__, options: options, match: match
+    log __method__, match: match
 
     dealer_arguments = {
-      match_name: Zaru.sanitize!(Shellwords.escape(match.name.gsub(/\s+/, '_'))),
+      match_name: match.sanitized_name,
       game_def_file_name: Shellwords.escape(match.game_definition_file_name),
       hands: Shellwords.escape(match.number_of_hands),
       random_seed: Shellwords.escape(match.random_seed.to_s),
       player_names: match.player_names.map { |name| Shellwords.escape(name.gsub(/\s+/, '_')) }.join(' '),
-      options: (options.split(' ').map { |o| Shellwords.escape o }.join(' ') || '')
+      options: match.dealer_options
     }
 
     log __method__, {
       match_id: match.id,
+      match_name: match.name,
       dealer_arguments: dealer_arguments,
       log_directory: ::AcpcTableManager.config.match_log_directory,
       port_numbers: port_numbers,
@@ -44,11 +45,14 @@ module Dealer
       )
     end
 
-    match.port_numbers = dealer_info[:port_numbers]
+    match.dealer_pid = dealer_info[:pid]
+    match.port_numbers = dealer_info[:port_numbers].map { |e| e.to_i }
     match.save!
 
     log __method__, {
       match_id: match.id,
+      match_name: match.name,
+      dealer_pid: match.dealer_pid,
       saved_port_numbers: match.port_numbers
     }
 

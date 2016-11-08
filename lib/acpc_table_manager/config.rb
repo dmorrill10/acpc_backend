@@ -61,7 +61,7 @@ module AcpcTableManager
           instance_variable_get("@#{constant}".to_sym)
         end
       end
-      unless @special_ports_to_dealer
+      unless special_ports_to_dealer
         @special_ports_to_dealer = []
         log(__method__, {adding: {method: 'special_ports_to_dealer', value: @special_ports_to_dealer}})
         define_singleton_method(:special_ports_to_dealer) do

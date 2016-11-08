@@ -26,6 +26,7 @@ class Proxy
 
     proxy = new(
       match.id,
+      match.sanitized_name,
       AcpcDealer::ConnectionInformation.new(
         match.port_numbers[match.seat - 1],
         ::AcpcTableManager.config.dealer_host
@@ -43,12 +44,14 @@ class Proxy
   # @todo Reduce the # of params
   #
   # @param [String] match_id The ID of the match in which this player is participating.
+  # @param [String] match_name The name of the match in which this player is participating.
   # @param [DealerInformation] dealer_information Information about the dealer to which this bot should connect.
   # @param [GameDefinition, #to_s] game_definition A game definition; either a +GameDefinition+ or the name of the file containing a game definition.
   # @param [String] player_names The names of the players in this match.
   # @param [Integer] number_of_hands The number of hands in this match.
   def initialize(
     match_id,
+    match_name,
     dealer_information,
     users_seat,
     game_definition,
@@ -56,7 +59,7 @@ class Proxy
     number_of_hands=1,
     must_send_ready=false
   )
-    @logger = AcpcTableManager.new_log File.join('proxies', "#{match_id}.#{users_seat}.log")
+    @logger = AcpcTableManager.new_log File.join('proxies', "#{match_name}.#{match_id}.#{users_seat}.log")
 
     log __method__, {
       dealer_information: dealer_information,
@@ -87,11 +90,13 @@ class Proxy
   def next_hand!
     log __method__
 
-    @player_proxy.next_hand! do |players_at_the_table|
-      update_database! players_at_the_table
+    if @player_proxy.hand_ended?
+      @player_proxy.next_hand! do |players_at_the_table|
+        update_database! players_at_the_table
 
-      yield players_at_the_table if block_given?
-    end
+        yield players_at_the_table if block_given?
+      end
+     end
 
     log(
       __method__,
@@ -107,26 +112,30 @@ class Proxy
   # Player action interface
   # @see PlayerProxy#play!
   def play!(action, fast_forward = false)
-    log __method__, action: action
+    log __method__, users_turn_to_act?: @player_proxy.users_turn_to_act?, action: action
 
-    action = PokerAction.new(action) unless action.is_a?(PokerAction)
+    if @player_proxy.users_turn_to_act?
+      action = PokerAction.new(action) unless action.is_a?(PokerAction)
 
-    @player_proxy.play! action do |players_at_the_table|
-      update_database! players_at_the_table, fast_forward
+      @player_proxy.play! action do |players_at_the_table|
+        update_database! players_at_the_table, fast_forward
 
-      yield players_at_the_table if block_given?
+        yield players_at_the_table if block_given?
+      end
+
+      log(
+        __method__,
+        {
+          users_turn_to_act?: @player_proxy.users_turn_to_act?,
+          match_ended?: @player_proxy.match_ended?
+        }
+      )
     end
-
-    log(
-      __method__,
-      {
-        users_turn_to_act?: @player_proxy.users_turn_to_act?,
-        match_ended?: @player_proxy.match_ended?
-      }
-    )
 
     self
   end
+
+  def users_turn_to_act?() @player_proxy.users_turn_to_act? end
 
   def play_check_fold!
     log __method__

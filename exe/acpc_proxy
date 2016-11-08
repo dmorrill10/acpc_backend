@@ -71,6 +71,8 @@ begin
         proxy.play! action
       end
       last_message_received = Time.now
+    elsif !proxy.users_turn_to_act?
+      last_message_received = Time.now
     elsif (
       AcpcTableManager.config.proxy_timeout_s &&
       (
@@ -82,16 +84,11 @@ begin
       # @todo Allow different behaviour on timeout
       proxy.play_check_fold!
     end
-    if proxy.match_ended?
-      AcpcTableManager.redis.rpush(
-        'table-manager',
-        {
-          'request' => AcpcTableManager.config.kill_match,
-          'params' => {
-            AcpcTableManager.config.match_id_key => options[:match_id]
-          }
-        }.to_json
-      )
+    match = AcpcTableManager::Match.find options[:match_id]
+    if proxy.match_ended? or !match.dealer_running?
+      match.proxy_pid = -1
+      match.dealer_pid = -1
+      match.save!
       exit
     end
   end

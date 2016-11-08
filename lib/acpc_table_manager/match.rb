@@ -1,8 +1,9 @@
-
 require 'mongoid'
+require 'zaru'
 
 require 'acpc_poker_types/game_definition'
 require 'acpc_poker_types/match_state'
+require 'acpc_dealer'
 
 require_relative 'match_slice'
 require_relative 'config'
@@ -32,32 +33,84 @@ class Match
   scope :inactive, ->(lifespan) do
     started.and.old(lifespan)
   end
+  scope :active_between, ->(lifespan, reference_time=Time.now) do
+    started.and.where(
+      { 'slices.updated_at' => { '$gt' => (reference_time - lifespan)}}
+    ).and.where(
+      { 'slices.updated_at' => { '$lt' => reference_time}}
+    )
+  end
   scope :with_slices, ->(has_slices) do
     where({ 'slices.0' => { '$exists' => has_slices }})
   end
   scope :started, -> { with_slices(true) }
   scope :not_started, -> { with_slices(false) }
-  scope :with_running_status, ->(is_running) do
-    where(is_running: is_running)
-  end
-  scope :running, -> { with_running_status(true) }
-  scope :not_running, -> { with_running_status(false) }
-  scope :running_or_started, -> { any_of([running.selector, started.selector]) }
+  scope :ready_to_start, -> { where(ready_to_start: true) }
 
   class << self
-    def id_exists?(match_id)
-      where(id: match_id).exists?
+    # @todo Move to AcpcDealer
+    def kill_process_if_running(pid)
+      begin
+        AcpcDealer::kill_process pid
+        sleep 1 # Give the process a chance to exit
+
+        if AcpcDealer::process_exists?(pid)
+          AcpcDealer::force_kill_process pid
+          sleep 1 # Give the process a chance to exit
+
+          if AcpcDealer::process_exists?(pid)
+            yield if block_given?
+          end
+        end
+      rescue Errno::ESRCH
+      end
+    end
+
+    def id_exists?(match_id, matches=all)
+      matches.where(id: match_id).exists?
+    end
+
+    def quiet_find(match_id)
+      begin
+        match = Match.find match_id
+      rescue Mongoid::Errors::DocumentNotFound
+        nil
+      end
     end
 
     # Almost scopes
-    def finished
-      all.select { |match| match.finished? }
+    def running(matches=all)
+      matches.select { |match| match.running? }
+    end
+    def not_running(matches=all)
+      matches.select { |match| !match.running? }
+    end
+    def finished(matches=all)
+      matches.select { |match| match.finished? }
     end
     def unfinished(matches=all)
       matches.select { |match| !match.finished? }
     end
-    def started_and_unfinished()
+    def started_and_unfinished
       started.to_a.select { |match| !match.finished? }
+    end
+
+    def ports_in_use(matches=all)
+      running(matches).inject([]) { |ports, m| ports += m.port_numbers }
+    end
+
+    # @return The matches to be started (have not been started and not
+    #   currently running) ordered from newest to oldest.
+    def start_queue(matches=all)
+      not_running(matches.not_started.and.ready_to_start.desc(:updated_at))
+    end
+
+    def kill_all_orphan_processes!(matches=all)
+      matches.each { |m| m.kill_orphan_processes! }
+    end
+
+    def kill_all_orphan_proxies!(matches=all)
+      matches.each { |m| m.kill_orphan_proxy! }
     end
 
     # Schema
@@ -163,7 +216,10 @@ class Match
   field :port_numbers, type: Array
   field :random_seed, type: Integer, default: new_random_seed
   field :last_slice_viewed, type: Integer, default: -1
-  field :is_running, type: Boolean, default: false
+  field :dealer_pid, type: Integer, default: -1
+  field :proxy_pid, type: Integer, default: -1
+  field :ready_to_start, type: Boolean, default: false
+  field :unable_to_start_dealer, type: Boolean, default: false
   field :dealer_options, type: String, default: (
     [
       '-a', # Append logs with the same name rather than overwrite
@@ -206,6 +262,10 @@ class Match
   end
 
   # Initializers
+  def set_dealer_options!(options)
+    self.dealer_options = (options.split(' ').map { |o| Shellwords.escape o }.join(' ') || '')
+    self
+  end
   def set_name!(name_ = self.name_from_user)
     name_from_user_ = name_.strip
     self.name = name_from_user_
@@ -230,6 +290,7 @@ class Match
     set_name!.set_seat!.set_game_definition_file_name!.set_game_definition_hash!
     self.opponent_names ||= self.class().default_opponent_names(game_info['num_players'])
     self.number_of_hands ||= 1
+    self.ready_to_start = true
     save!
     self
   end
@@ -278,14 +339,14 @@ class Match
   def no_limit?
     @is_no_limit ||= game_def.betting_type == AcpcPokerTypes::GameDefinition::BETTING_TYPES[:nolimit]
   end
-  def started?
-    !self.slices.empty?
+  def started?() !self.slices.empty? end
+  def finished?() started? && self.slices.last.match_ended? end
+  def running?() dealer_running? && proxy_running? end
+  def dealer_running?
+    self.dealer_pid >= 0 && AcpcDealer::process_exists?(self.dealer_pid)
   end
-  def finished?
-    started? && self.slices.last.match_ended?
-  end
-  def running?
-    self.is_running
+  def proxy_running?
+    self.proxy_pid >= 0 && AcpcDealer::process_exists?(self.proxy_pid)
   end
   def all_slices_viewed?
     self.last_slice_viewed >= (self.slices.length - 1)
@@ -345,6 +406,44 @@ class Match
       # Remove seats already taken by players who have already joined this match
       self.class().where(name: self.name).ne(name_from_user: self.name).map { |m| m.seat }
     )
+  end
+  def sanitized_name
+    Zaru.sanitize!(Shellwords.escape(self.name.gsub(/\s+/, '_')))
+  end
+  def kill_dealer!
+    self.class().kill_process_if_running(self.dealer_pid) do
+      raise(
+        StandardError.new(
+          "Dealer process #{self.dealer_pid} couldn't be killed!"
+        )
+      )
+    end
+  end
+
+  def defunkt?()
+    (started? and !running? and !finished?) || self.unable_to_start_dealer
+  end
+
+  def kill_proxy!
+    self.class().kill_process_if_running(self.proxy_pid) do
+      raise(
+        StandardError.new(
+          "Proxy process #{self.proxy_pid} couldn't be killed!"
+        )
+      )
+    end
+  end
+
+  def kill_orphan_proxy!
+    kill_proxy! if proxy_running? && !dealer_running?
+  end
+
+  def kill_orphan_processes!
+    if dealer_running? && !proxy_running?
+      kill_dealer!
+    elsif proxy_running && !dealer_running?
+      kill_proxy!
+    end
   end
 end
 end
