@@ -65,8 +65,11 @@ begin
       proxy.log(__method__, {data: data})
 
       action = data[AcpcTableManager.config.action_key]
-      if action == AcpcTableManager.config.next_hand_request_code
-        proxy.next_hand! if must_send_ready
+      if (
+        AcpcTableManager.config.next_hand_request_code &&
+        action == AcpcTableManager.config.next_hand_request_code
+      )
+        proxy.next_hand!
       else
         proxy.play! action
       end
