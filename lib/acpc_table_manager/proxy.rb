@@ -287,6 +287,13 @@ class Proxy
         }
       )
 
+      if ms.first_state_of_round? && ms.round > 0
+        s = if ms.community_cards[ms.round - 1].length > 1 then 'are' else 'is' end
+        new_slice.messages << (
+          "#{(ms.community_cards[ms.round - 1].map { |c| c.rank.to_s + c.suit.to_html }).join('')} #{s} revealed."
+        )
+      end
+
       if players_at_the_table.hand_ended?
         log(
           __method__,
