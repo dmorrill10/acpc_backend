@@ -56,17 +56,19 @@ class Match
       end
     end
     def kill_process_if_running(pid)
-      begin
-        safe_kill pid
-        if AcpcDealer::process_exists?(pid)
-          AcpcDealer::force_kill_process pid
-          sleep 1 # Give the process a chance to exit
-
+      if pid && pid > 0
+        begin
+          safe_kill pid
           if AcpcDealer::process_exists?(pid)
-            yield if block_given?
+            AcpcDealer::force_kill_process pid
+            sleep 1 # Give the process a chance to exit
+
+            if AcpcDealer::process_exists?(pid)
+              yield if block_given?
+            end
           end
+        rescue Errno::ESRCH
         end
-      rescue Errno::ESRCH
       end
     end
 
