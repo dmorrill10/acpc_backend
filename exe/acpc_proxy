@@ -89,8 +89,8 @@ begin
     end
     match = AcpcTableManager::Match.find options[:match_id]
     if proxy.match_ended? or !match.dealer_running?
-      match.proxy_pid = -1
-      match.dealer_pid = -1
+      match.proxy_pid = nil
+      match.dealer_pid = nil
       match.save!
       exit
     end

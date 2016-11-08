@@ -49,11 +49,15 @@ class Match
 
   class << self
     # @todo Move to AcpcDealer
-    def kill_process_if_running(pid)
-      begin
+    def safe_kill(pid)
+      if pid && pid > 0
         AcpcDealer::kill_process pid
         sleep 1 # Give the process a chance to exit
-
+      end
+    end
+    def kill_process_if_running(pid)
+      begin
+        safe_kill pid
         if AcpcDealer::process_exists?(pid)
           AcpcDealer::force_kill_process pid
           sleep 1 # Give the process a chance to exit
@@ -216,8 +220,8 @@ class Match
   field :port_numbers, type: Array
   field :random_seed, type: Integer, default: new_random_seed
   field :last_slice_viewed, type: Integer, default: -1
-  field :dealer_pid, type: Integer, default: -1
-  field :proxy_pid, type: Integer, default: -1
+  field :dealer_pid, type: Integer, default: nil
+  field :proxy_pid, type: Integer, default: nil
   field :ready_to_start, type: Boolean, default: false
   field :unable_to_start_dealer, type: Boolean, default: false
   field :dealer_options, type: String, default: (
@@ -343,10 +347,10 @@ class Match
   def finished?() started? && self.slices.last.match_ended? end
   def running?() dealer_running? && proxy_running? end
   def dealer_running?
-    self.dealer_pid >= 0 && AcpcDealer::process_exists?(self.dealer_pid)
+    self.dealer_pid && self.dealer_pid > 0 && AcpcDealer::process_exists?(self.dealer_pid)
   end
   def proxy_running?
-    self.proxy_pid >= 0 && AcpcDealer::process_exists?(self.proxy_pid)
+    self.proxy_pid && self.proxy_pid > 0 && AcpcDealer::process_exists?(self.proxy_pid)
   end
   def all_slices_viewed?
     self.last_slice_viewed >= (self.slices.length - 1)
