@@ -84,8 +84,15 @@ begin
         )
       )
     )
-      # @todo Allow different behaviour on timeout
-      proxy.play_check_fold!
+      if AcpcTableManager.config.on_proxy_timeout == 'fold'
+        proxy.play_check_fold!
+      else
+        match = AcpcTableManager::Match.find options[:match_id]
+        match.proxy_pid = nil
+        match.dealer_pid = nil
+        match.save!
+        exit
+      end
     end
     match = AcpcTableManager::Match.find options[:match_id]
     if proxy.match_ended? or !match.dealer_running?

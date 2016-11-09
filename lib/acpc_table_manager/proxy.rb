@@ -2,6 +2,7 @@ require_relative 'config'
 require_relative 'match'
 require_relative 'match_slice'
 
+require 'hescape'
 require 'acpc_poker_player_proxy'
 require 'acpc_poker_types'
 
@@ -213,7 +214,7 @@ class Proxy
 
       if ms.first_state_of_first_round?
         new_slice.messages << hand_dealt_description(
-          @match.player_names,
+          @match.player_names.map { |n| Hescape.escape_html(n) },
           ms.hand_number + 1,
           players_at_the_table.game_def,
           @match.number_of_hands
@@ -308,7 +309,7 @@ class Proxy
               player.hand +
               ms.community_cards.flatten
             ).to_poker_hand_description
-            new_slice.messages << "#{@match.player_names[i]} shows #{hd}"
+            new_slice.messages << "#{Hescape.escape_html(@match.player_names[i])} shows #{hd}"
           end
         end
         winning_players = new_slice.players.select do |player|
@@ -316,7 +317,7 @@ class Proxy
         end
         if winning_players.length > 1
           new_slice.messages << split_pot_description(
-            winning_players.map { |player| player['name'] },
+            winning_players.map { |player| Hescape.escape_html(player['name']) },
             ms.pot(players_at_the_table.game_def)
           )
         else
@@ -330,7 +331,7 @@ class Proxy
           end
 
           new_slice.messages << hand_win_description(
-            winning_players.first['name'],
+            Hescape.escape_html(winning_players.first['name']),
             winnings,
             chip_balance - winnings
           )
