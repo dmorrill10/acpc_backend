@@ -93,11 +93,7 @@ class Match
       matches.possibly_running.select { |match| match.running? }
     end
     def not_running(matches=all)
-      (
-        matches.not.possibly_running.to_a + (
-          matches.possibly_running.select { |match| !match.running? }
-        )
-      )
+      matches.select { |match| !match.running? }
     end
     def finished(matches=all)
       matches.select { |match| match.finished? }
@@ -116,7 +112,7 @@ class Match
     # @return The matches to be started (have not been started and not
     #   currently running) ordered from newest to oldest.
     def start_queue(matches=all)
-      not_running(matches.not_started.and.ready_to_start.desc(:updated_at))
+      matches.not_started.and.ready_to_start.desc(:updated_at)
     end
 
     def kill_all_orphan_processes!(matches=all)
