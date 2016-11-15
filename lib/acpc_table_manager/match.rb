@@ -46,6 +46,10 @@ class Match
   scope :started, -> { with_slices(true) }
   scope :not_started, -> { with_slices(false) }
   scope :ready_to_start, -> { where(ready_to_start: true) }
+  scope(
+    :possibly_running,
+    where(:proxy_pid.gt => 0).and.where(:dealer_pid.gt => 0)
+  )
 
   class << self
     # @todo Move to AcpcDealer
@@ -86,10 +90,14 @@ class Match
 
     # Almost scopes
     def running(matches=all)
-      matches.select { |match| match.running? }
+      matches.possibly_running.select { |match| match.running? }
     end
     def not_running(matches=all)
-      matches.select { |match| !match.running? }
+      (
+        matches.not.possibly_running.to_a + (
+          matches.possibly_running.select { |match| !match.running? }
+        )
+      )
     end
     def finished(matches=all)
       matches.select { |match| match.finished? }
@@ -424,6 +432,9 @@ class Match
         )
       )
     end
+    self.dealer_pid = nil
+    save
+    self
   end
 
   def defunkt?()
@@ -438,6 +449,9 @@ class Match
         )
       )
     end
+    self.proxy_pid = nil
+    save
+    self
   end
 
   def kill_orphan_proxy!
