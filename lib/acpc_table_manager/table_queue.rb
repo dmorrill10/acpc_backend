@@ -145,7 +145,7 @@ module AcpcTableManager
       )
       return nil if my_matches_to_start.empty?
 
-      match = my_matches_to_start.pop
+      match = my_matches_to_start.last
 
       log(
         __method__,
