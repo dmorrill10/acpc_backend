@@ -1,10 +1,7 @@
 require 'acpc_dealer'
 require 'timeout'
 require 'zaru'
-
 require_relative 'config'
-require_relative 'match'
-
 require_relative 'simple_logging'
 
 module AcpcTableManager

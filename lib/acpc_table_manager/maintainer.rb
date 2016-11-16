@@ -1,8 +1,4 @@
-require 'yaml'
-require_relative 'dealer'
-require_relative 'match'
 require_relative 'table_queue'
-
 require_relative 'simple_logging'
 using AcpcTableManager::SimpleLogging::MessageFormatting
 

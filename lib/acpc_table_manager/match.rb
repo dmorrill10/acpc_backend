@@ -50,6 +50,13 @@ class Match
     :possibly_running,
     where(:proxy_pid.gt => 0).and.where(:dealer_pid.gt => 0)
   )
+  # @return The matches to be started (have not been started and not
+  #   currently running) ordered from newest to oldest.
+  scope :queue, not_started.and.ready_to_start.desc(:updated_at)
+
+  index({ game_definition_key: 1 })
+  index({ proxy_pid: 1, dealer_pid: 1 })
+  index({ user_name: 1 })
 
   class << self
     # @todo Move to AcpcDealer
@@ -107,12 +114,6 @@ class Match
 
     def ports_in_use(matches=all)
       running(matches).inject([]) { |ports, m| ports += m.port_numbers }
-    end
-
-    # @return The matches to be started (have not been started and not
-    #   currently running) ordered from newest to oldest.
-    def start_queue(matches=all)
-      matches.not_started.and.ready_to_start.desc(:updated_at)
     end
 
     def kill_all_orphan_processes!(matches=all)

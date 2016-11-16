@@ -68,7 +68,7 @@ module AcpcTableManager
       self
     end
 
-    def matches_to_start() Match.start_queue(my_matches) end
+    def matches_to_start() my_matches.queue end
 
     def my_matches
       Match.where(game_definition_key: @game_definition_key.to_sym)
