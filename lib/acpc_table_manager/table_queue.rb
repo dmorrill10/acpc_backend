@@ -91,27 +91,30 @@ module AcpcTableManager
     end
 
     def check!
+      my_matches_to_start = matches_to_start.to_a
+      num_running_matches = Match.running(my_matches).length
       log(
         __method__,
         {
-            num_running_matches: Match.running(my_matches).length,
-            num_matches_to_start: matches_to_start.length
+            num_running_matches: num_running_matches,
+            num_matches_to_start: my_matches_to_start.length
         }
       )
 
       matches_started = []
       while (
-        !matches_to_start.empty? &&
-        Match.running(my_matches).length < AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
+        !my_matches_to_start.empty? &&
+        num_running_matches < AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
       )
-        matches_started << dequeue
+        matches_started << dequeue(my_matches_to_start.pop)
+        num_running_matches += 1
       end
 
       log(
         __method__,
         {
           matches_started: matches_started,
-          num_running_matches: Match.running(my_matches).length,
+          num_running_matches: num_running_matches,
           num_matches_to_start: matches_to_start.length
         }
       )
@@ -121,13 +124,13 @@ module AcpcTableManager
 
     protected
 
-    def port(available_ports_)
-      port_ = available_ports_.pop
+    def port(available_ports)
+      port_ = available_ports.pop
       while !AcpcDealer::port_available?(port_)
-        if available_ports_.empty?
+        if available_ports.empty?
           raise NoPortForDealerAvailable.new("None of the special ports (#{available_special_ports}) are open")
         end
-        port_ = available_ports_.pop
+        port_ = available_ports.pop
       end
       unless port_
         raise NoPortForDealerAvailable.new("None of the special ports (#{available_special_ports}) are open")
@@ -135,18 +138,22 @@ module AcpcTableManager
       port_
     end
 
+    def ports_to_use(special_port_requirements, available_ports = nil)
+      ports = special_port_requirements.map do |r|
+        if r
+          # Slow. Only check available special ports if necessary
+          available_ports ||= available_special_ports
+          port(available_ports)
+        else
+          0
+        end
+      end
+      return ports, available_ports
+    end
+
     # @return [Object] The match that has been started or +nil+ if none could
     #   be started.
-    def dequeue
-      my_matches_to_start = matches_to_start
-      log(
-        __method__,
-        num_matches_to_start: my_matches_to_start.length
-      )
-      return nil if my_matches_to_start.empty?
-
-      match = my_matches_to_start.last
-
+    def dequeue(match)
       log(
         __method__,
         msg: "Starting dealer for match \"#{match.name}\" (#{match.id})",
@@ -158,10 +165,7 @@ module AcpcTableManager
       # Add user's port
       special_port_requirements.insert(match.seat - 1, false)
 
-      available_ports_ = available_special_ports
-      ports_to_be_used = special_port_requirements.map do |r|
-        if r then port(available_ports_) else 0 end
-      end
+      ports_to_be_used, available_ports = ports_to_use(special_port_requirements)
 
       num_repetitions = 0
       dealer_info = nil
@@ -170,7 +174,7 @@ module AcpcTableManager
         log(
           __method__,
           msg: "Added #{match.id} list of running matches",
-          available_special_ports: available_ports_,
+          available_special_ports: available_ports,
           special_port_requirements: special_port_requirements,
           :'ports_to_be_used_(zero_for_random)' => ports_to_be_used
         )
@@ -183,14 +187,12 @@ module AcpcTableManager
             Logger::Severity::WARN
           )
           begin
-            ports_to_be_used = special_port_requirements.map do |r|
-              if r then port(available_ports_) else 0 end
-            end
+            ports_to_be_used, available_ports = ports_to_use(special_port_requirements, available_ports)
           rescue NoPortForDealerAvailable => e
-            available_ports_ = available_special_ports
+            available_ports = available_special_ports
             log(
               __method__,
-              {warning: "#{ports_to_be_used} ports unavailable, retrying with all special ports, #{available_ports_}."},
+              {warning: "#{ports_to_be_used} ports unavailable, retrying with all special ports, #{available_ports}."},
               Logger::Severity::WARN
             )
           end
@@ -198,7 +200,7 @@ module AcpcTableManager
             sleep 1
             log(
               __method__,
-              {warning: "Retrying with all special ports, #{available_ports_}."},
+              {warning: "Retrying with all special ports, #{available_ports}."},
               Logger::Severity::WARN
             )
             num_repetitions += 1

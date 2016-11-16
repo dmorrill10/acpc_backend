@@ -113,7 +113,11 @@ class Match
     end
 
     def ports_in_use(matches=all)
-      running(matches).inject([]) { |ports, m| ports += m.port_numbers }
+      ports = []
+      matches.possibly_running.each do |match|
+        ports += m.port_numbers if match.running?
+      end
+      ports
     end
 
     def kill_all_orphan_processes!(matches=all)
