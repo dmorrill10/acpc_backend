@@ -114,8 +114,8 @@ class Match
 
     def ports_in_use(matches=all)
       ports = []
-      matches.possibly_running.each do |match|
-        ports += m.port_numbers if match.running?
+      matches.possibly_running.each do |m|
+        ports += m.port_numbers if m.running?
       end
       ports
     end
