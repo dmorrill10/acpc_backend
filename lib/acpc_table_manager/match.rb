@@ -183,6 +183,7 @@ class Match
     end
     def new_random_seed
       # The ACPC dealer requires 32 bit random seeds
+      # TODO The bound to rand is exclusive so this should be 2**33
       rand(2**33 - 1)
     end
     def new_random_seat(num_players)

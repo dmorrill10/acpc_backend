@@ -27,31 +27,27 @@ module AcpcTableManager
 
       log(
         __method__,
-        {
-          game_definition_key: @game_definition_key,
-          max_num_matches: AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
-        }
+        game_definition_key: @game_definition_key,
+        max_num_matches: AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
       )
     end
 
     def start_players!(match)
       Opponents.start(match)
-      log(__method__, msg: "Opponents started for #{match.id.to_s}")
+      log(__method__, msg: "Opponents started for #{match.id}")
 
       start_proxy! match
     end
 
     def start_proxy!(match)
-      command = "#{File.expand_path('../../../exe/acpc_proxy', __FILE__)} -t #{AcpcTableManager.config_file} -m #{match.id.to_s}"
+      command = "#{File.expand_path('../../../exe/acpc_proxy', __FILE__)} -t #{AcpcTableManager.config_file} -m #{match.id}"
       log(
         __method__,
-        {
-          msg: "Starting proxy for #{match.id.to_s}",
-          command: command
-        }
+        msg: "Starting proxy for #{match.id}",
+        command: command
       )
 
-      match.proxy_pid = Timeout::timeout(3) do
+      match.proxy_pid = Timeout.timeout(3) do
         pid = Process.spawn(command)
         Process.detach(pid)
         pid
@@ -60,15 +56,15 @@ module AcpcTableManager
 
       log(
         __method__,
-        {
-          msg: "Started proxy for \"#{match.name}\" (#{match.id.to_s})",
-          pid: match.proxy_pid
-        }
+        msg: "Started proxy for \"#{match.name}\" (#{match.id})",
+        pid: match.proxy_pid
       )
       self
     end
 
-    def matches_to_start() my_matches.queue end
+    def matches_to_start
+      my_matches.queue
+    end
 
     def my_matches
       Match.where(game_definition_key: @game_definition_key.to_sym)
@@ -80,7 +76,9 @@ module AcpcTableManager
       prevNumMatchesRunning != Match.running(my_matches).length
     end
 
-    def length() matches_to_start.length end
+    def length
+      matches_to_start.length
+    end
 
     def available_special_ports
       if AcpcTableManager.exhibition_config.special_ports_to_dealer
@@ -91,32 +89,40 @@ module AcpcTableManager
     end
 
     def check!
+      return if length < 1
+
       my_matches_to_start = matches_to_start.to_a
-      num_running_matches = Match.running(my_matches).length
-      log(
-        __method__,
-        {
-            num_running_matches: num_running_matches,
-            num_matches_to_start: my_matches_to_start.length
-        }
-      )
+
+      max_running_matches = AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
+      check_num_running_matches = max_running_matches > 0
+
+      num_running_matches = 0
+      if check_num_running_matches
+        num_running_matches = Match.running(my_matches).length
+        log(
+          __method__,
+          num_running_matches: num_running_matches,
+          num_matches_to_start: my_matches_to_start.length
+        )
+      end
 
       matches_started = []
-      while (
+      while
         !my_matches_to_start.empty? &&
-        num_running_matches < AcpcTableManager.exhibition_config.games[@game_definition_key]['max_num_matches']
-      )
+        (
+          !check_num_running_matches ||
+          num_running_matches < max_running_matches
+        )
+
         matches_started << dequeue(my_matches_to_start.pop)
         num_running_matches += 1
       end
 
       log(
         __method__,
-        {
-          matches_started: matches_started,
-          num_running_matches: num_running_matches,
-          num_matches_to_start: matches_to_start.length
-        }
+        matches_started: matches_started,
+        num_running_matches: num_running_matches,
+        num_matches_to_start: matches_to_start.length
       )
 
       matches_started
@@ -126,14 +132,14 @@ module AcpcTableManager
 
     def port(available_ports)
       port_ = available_ports.pop
-      while !AcpcDealer::port_available?(port_)
+      until AcpcDealer.port_available?(port_)
         if available_ports.empty?
-          raise NoPortForDealerAvailable.new("None of the special ports (#{available_special_ports}) are open")
+          raise NoPortForDealerAvailable, "None of the special ports (#{available_special_ports}) are open"
         end
         port_ = available_ports.pop
       end
       unless port_
-        raise NoPortForDealerAvailable.new("None of the special ports (#{available_special_ports}) are open")
+        raise NoPortForDealerAvailable, "None of the special ports (#{available_special_ports}) are open"
       end
       port_
     end
@@ -148,7 +154,7 @@ module AcpcTableManager
           0
         end
       end
-      return ports, available_ports
+      [ports, available_ports]
     end
 
     # @return [Object] The match that has been started or +nil+ if none could
@@ -170,7 +176,7 @@ module AcpcTableManager
       num_repetitions = 0
       dealer_info = nil
 
-      while dealer_info.nil? do
+      while dealer_info.nil?
         log(
           __method__,
           msg: "Added #{match.id} list of running matches",
@@ -183,7 +189,7 @@ module AcpcTableManager
         rescue Timeout::Error => e
           log(
             __method__,
-            {warning: "The dealer for match \"#{match.name}\" (#{match.id}) timed out."},
+            { warning: "The dealer for match \"#{match.name}\" (#{match.id}) timed out." },
             Logger::Severity::WARN
           )
           begin
@@ -192,7 +198,7 @@ module AcpcTableManager
             available_ports = available_special_ports
             log(
               __method__,
-              {warning: "#{ports_to_be_used} ports unavailable, retrying with all special ports, #{available_ports}."},
+              { warning: "#{ports_to_be_used} ports unavailable, retrying with all special ports, #{available_ports}." },
               Logger::Severity::WARN
             )
           end
@@ -200,14 +206,14 @@ module AcpcTableManager
             sleep 1
             log(
               __method__,
-              {warning: "Retrying with all special ports, #{available_ports}."},
+              { warning: "Retrying with all special ports, #{available_ports}." },
               Logger::Severity::WARN
             )
             num_repetitions += 1
           else
             log(
               __method__,
-              {warning: "Unable to start match after retry, giving up."},
+              { warning: 'Unable to start match after retry, giving up.' },
               Logger::Severity::ERROR
             )
             match.unable_to_start_dealer = true
