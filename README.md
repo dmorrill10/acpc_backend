@@ -1,25 +1,13 @@
-# AcpcTableManager
+# Annual Computer Poker Competition Table Manager
 
-Must be able to accomplish the following tasks:
+This is a server that starts an ACPC poker match on demand according to a fixed
+configuration set at start-up through a messaging server
+([Redis](https://redis.io/)). It manages the log files produced by all matches.
+All matches to be started are persisted in a file-based queue, and information
+about those already running are also saved in a file. Special ports can be
+designed for use by agents that require them to connect remotely to
+`dealer` instances, and this server will manage their allocation.
 
-- Start a dealer
-- Start a bot and have it connect to the dealer
-- Start multiple bots and have them connect to the dealer
-- Start a proxy and connect it to the dealer
-- Send actions to the proxy for them to be played
-- Ensure dealer processes are killed when matches are finished
-- Ensure the number of matches being run is less than set maximum
-- Manage a queue of matches
-    - Start the next match in the queue when one finishes
-- Manage a pool of port on which remote bots can connect to dealers
-
-The following tasks can be done in parallel:
-
-- Playing actions
-- Starting proxies
-- Starting bots
-
-Everything else must be done sequentially.
 
 ## Installation
 
@@ -55,4 +43,3 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/[USERN
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
-

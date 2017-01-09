@@ -118,6 +118,7 @@ module AcpcTableManager
         end
       )
     end
+    FileUtils.mkdir(opponents_log_dir) unless File.directory?(opponents_log_dir)
 
     @@is_initialized = true
 
@@ -157,6 +158,10 @@ module AcpcTableManager
     @@is_initialized = false
   end
 
+  def self.opponents_log_dir
+    File.join(AcpcTableManager.config.log_directory, 'opponents')
+  end
+
   def self.data_directory(game = nil)
     raise_if_uninitialized
     if game
@@ -182,13 +187,8 @@ module AcpcTableManager
     YAML.load_file(running_matches_file(game)) || []
   end
 
-  def self.start_dealer(match_info)
-    config.log(
-      __method__,
-      msg: "Starting dealer for match \"#{match_info['name']}\"."
-    )
-
-    dealer_arguments = {
+  def self.dealer_arguments(match_info)
+    {
       match_name: shell_sanitize(match_info['name']),
       game_def_file_name: Shellwords.escape(
         exhibition_config.games[match_info['game_def_key']]['file']
@@ -197,64 +197,83 @@ module AcpcTableManager
         exhibition_config.games[match_info['game_def_key']]['num_hands_per_match']
       ),
       random_seed: Shellwords.escape(match_info['random_seed'].to_s),
-      player_names: (match_info['players'].map do |player|
-        Shellwords.escape(player['name'].gsub(/\s+/, '_'))
+      player_names: (match_info['players'].map do |name|
+        Shellwords.escape(name.gsub(/\s+/, '_'))
       end.join(' ')),
-      options: exhibition_config.games[match_info['game_def_key']]['dealer_options']
+      options: exhibition_config.dealer_options
     }
+  end
 
-    port_numbers = match_info['players'].map do |player|
-      player['port']
-    end
+  def self.proxy_player?(player_name, game_def_key)
+    exhibition_config.games[game_def_key]['opponents'][player_name].nil?
+  end
+
+  def self.start_dealer(match_info, port_numbers)
+    config.log(
+      __method__,
+      msg: "Starting dealer for match \"#{match_info['name']}\"."
+    )
 
     config.log __method__, {
-      dealer_arguments: dealer_arguments,
+      dealer_arguments: dealer_arguments(match_info),
       log_directory: ::AcpcTableManager.config.match_log_directory,
       port_numbers: port_numbers,
-      command: AcpcDealer::DealerRunner.command(dealer_arguments, port_numbers)
+      command: AcpcDealer::DealerRunner.command(
+        dealer_arguments(match_info),
+        port_numbers
+      )
     }
 
     Timeout::timeout(3) do
       AcpcDealer::DealerRunner.start(
-        dealer_arguments,
+        dealer_arguments(match_info),
         config.match_log_directory,
         port_numbers
       )
     end
   end
 
-  # Move the creation of this command into the match_info message
-  def self.start_proxy(proxy_id)
-    command = "#{File.expand_path('../../exe/acpc_proxy', __FILE__)} -t #{config_file} -m #{proxy_id}"
-    config.log(
-      __method__,
-      msg: "Starting proxy for \"#{proxy_id}\".",
-      command: command
-    )
+  def self.start_process(command, log_file = nil)
+    config.log __method__, running_command: command
+
+    options = {}
+    if log_file
+      options[[:err, :out]] = [log_file, File::CREAT|File::WRONLY]
+    end
 
     pid = Timeout.timeout(3) do
-      pid = Process.spawn(command)
+      pid = Process.spawn(command, options)
       Process.detach(pid)
       pid
     end
 
-    config.log(
-      __method__,
-      msg: "Started proxy for \"#{proxy_id}\".",
-      pid: pid
-    )
+    config.log __method__, ran_command: command, pid: pid
+
     pid
   end
 
-  def self.start_players(match_info)
-    start_opponents match_info
+  def self.start_proxy(proxy_id, port)
+    command = "#{File.expand_path('../../exe/acpc_proxy', __FILE__)} -t #{config_file} -m #{proxy_id} -p #{port}"
     config.log(
       __method__,
-      msg: "Opponents started for \"#{match_info['name']}\"."
+      msg: "Starting proxy",
+      proxy_id: proxy_id,
+      port: port
     )
+    start_process command
+  end
 
-    match_info['proxies'].map do |player|
-      start_proxy proxy_id(match_info['name'], player)
+  def self.start_players(match_info, game_info, port_numbers)
+    match_info['players'].each_with_index do |player_name, i|
+      if game_info['opponents'][player_name]
+        start_bot(
+          participant_id(match_info['name'], player_name),
+          game_info['opponents'][player_name],
+          port_numbers[i]
+        )
+      else
+        start_proxy participant_id(match_info['name'], player_name), port_numbers[i]
+      end
     end
   end
 
@@ -289,49 +308,20 @@ module AcpcTableManager
 
   # @todo Unfinished. Merge with start_proxy.
   # @return [Array<Integer>] PIDs of the opponents started
-  def self.start_opponents(match)
-    opponents = match.bots(config.dealer_host)
-    log __method__, num_opponents: opponents.length
+  def self.start_bot(id, bot_info, port, host = 'localhost')
+    args = [bot_info[:runner].to_s, host.to_s, port.to_s]
+    log_file = File.join(opponents_log_dir, "#{id}.log")
+    command_to_run = args.join(' ')
 
-    if opponents.empty?
-      raise StandardError.new("No opponents found to start for \"#{match.name}\" (#{match.id.to_s})!")
-    end
-
-    opponents_log_dir = File.join(AcpcTableManager.config.log_directory, 'opponents')
-    FileUtils.mkdir(opponents_log_dir) unless File.directory?(opponents_log_dir)
-
-    bot_start_commands = opponents.map do |name, info|
+    config.log(
+      __method__,
       {
-        args: [info[:runner], info[:host], info[:port]],
-        log: File.join(opponents_log_dir, "#{match.name}.#{match.id}.#{name}.log")
+        starting_bot: id,
+        args: args,
+        log_file: log_file
       }
-    end
-
-    bot_start_commands.map do |bot_start_command|
-      log(
-        __method__,
-        {
-          bot_start_command_parameters: bot_start_command[:args],
-          command_to_be_run: bot_start_command[:args].join(' ')
-        }
-      )
-      pid = Timeout::timeout(3) do
-        ProcessRunner.go(
-          bot_start_command[:args].map { |e| e.to_s },
-          {
-            [:err, :out] => [bot_start_command[:log], File::CREAT|File::WRONLY]
-          }
-        )
-      end
-      log(
-        __method__,
-        {
-          bot_started?: true,
-          pid: pid
-        }
-      )
-      pid
-    end
+    )
+    start_process command_to_run, log_file
   end
 
   def self.enqueue_match(match_info)
@@ -345,7 +335,7 @@ module AcpcTableManager
     end
   end
 
-  def self.proxy_id(match_name, player)
+  def self.participant_id(match_name, player)
     "#{match_name}.#{player}"
   end
 
@@ -386,12 +376,44 @@ module AcpcTableManager
         end.flatten
 
         begin
-          next_match['players'].each do |player|
-            if player['requires_special_port']
-              player['port'] = next_special_port(ports_in_use)
+          port_numbers = next_match['players'].map do |player|
+            bot_info = info['opponents'][player]
+            if bot_info && bot_info['requires_special_port']
+              port_numbers << next_special_port(ports_in_use)
             else
-              player['port'] ||= 0
+              port_numbers << 0
             end
+          end
+
+          dealer_info = start_dealer next_match, port_numbers
+          proxy_pids = start_players(
+            next_match,
+            info,
+            dealer_info['port_numbers']
+          )
+
+          proxies = []
+          proxy_pids.each_with_index do |pid, i|
+            proxies.push(
+              name: next_match['proxies'][i],
+              pid: pid
+            )
+          end
+
+          running_matches_.push(
+            name: next_match['name'],
+            dealer: dealer_info,
+            proxies: proxies
+          )
+          File.open(started_matches_file(game), 'w') do |f|
+            f.write YAML.dump(running_matches_)
+          end
+
+          File.open(
+            enqueued_matches_file(match_info['game_def_key']),
+            'w'
+          ) do |f|
+            f.write YAML.dump(enqueued_matches_)
           end
         rescue NoPortForDealerAvailable => e
           config.log(
@@ -403,34 +425,6 @@ module AcpcTableManager
             Logger::Severity::WARN
           )
           skipped_matches << next_match
-          next
-        end
-
-        dealer_info = start_dealer next_match
-        proxy_pids = start_players next_match
-
-        proxies = []
-        proxy_pids.each_with_index do |pid, i|
-          proxies.push(
-            name: next_match['proxies'][i],
-            pid: pid
-          )
-        end
-
-        running_matches.push(
-          name: next_match['name'],
-          dealer: dealer_info,
-          proxies: proxies
-        )
-        File.open(started_matches_file(game), 'w') do |f|
-          f.write YAML.dump(running_matches_)
-        end
-
-        File.open(
-          enqueued_matches_file(match_info['game_def_key']),
-          'w'
-        ) do |f|
-          f.write YAML.dump(enqueued_matches_)
         end
       end
       unless enqueued_matches_.nil?

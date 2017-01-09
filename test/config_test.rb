@@ -152,12 +152,53 @@ describe AcpcTableManager do
 
   let(:match_info) do
     {
-      'name' => 'match_name',
+      'name' => 'my match',
       'game_def_key' => 'two_player_nolimit',
       'players' => [
         'ExamplePlayer',
-        'p2'
-      ]
+        'human player'
+      ],
+      'random_seed' => 9001
     }
+  end
+
+  describe '::shell_sanitize' do
+    it 'removes spaces' do
+      AcpcTableManager.shell_sanitize('hello world').must_equal 'hello_world'
+    end
+  end
+
+  describe '::dealer_arguments' do
+    it 'works' do
+      AcpcTableManager.load_config! config_data, pwd
+      AcpcTableManager.dealer_arguments(match_info).must_equal(
+        match_name: 'my_match',
+        game_def_file_name: AcpcDealer::GAME_DEFINITION_FILE_PATHS[2][:nolimit],
+        hands: '100',
+        random_seed: '9001',
+        player_names: 'ExamplePlayer human_player',
+        options: [
+          "--t_response 0",
+          "--t_hand 0",
+          "--t_per_hand 0",
+          "--t_ready 0",
+          "-a"
+        ]
+      )
+    end
+  end
+
+  describe '::proxy_player?' do
+    it 'works' do
+      AcpcTableManager.load_config! config_data, pwd
+      AcpcTableManager.proxy_player?(
+        'ExamplePlayer',
+        'two_player_nolimit'
+      ).must_equal false
+      AcpcTableManager.proxy_player?(
+        'NotExamplePlayer',
+        'two_player_nolimit'
+      ).must_equal true
+    end
   end
 end
