@@ -22,11 +22,6 @@ Gem::Specification.new do |spec|
   # To send emails
   spec.add_dependency "pony"
 
-  # For persistence
-  spec.add_dependency 'origin', '~>1.0'
-  spec.add_dependency 'moped', '~>1.4'
-  spec.add_dependency "mongoid", '~> 3.1'
-
   # For message passing
   spec.add_dependency 'redis', '~> 3.2'
 

@@ -8,9 +8,8 @@ describe AcpcTableManager do
       'match_log_directory' => '%{pwd}/../tmp/log/match_logs',
       'exhibition_constants' => '%{pwd}/support/exhibition.json',
       'log_directory' => '%{pwd}/tmp/log',
-      'mongoid_config' => '%{pwd}/support/mongoid.yml',
       'bots' => '%{pwd}/support/bots.yml',
-      'mongoid_env' => 'development'
+      'data_directory' => '%{pwd}/tmp/db'
     }
   }
   let (:pwd) { File.dirname(__FILE__) }
@@ -108,6 +107,29 @@ describe AcpcTableManager do
     AcpcTableManager.exhibition_config.spectate_button_id_prefix.must_equal "spectate-"
   end
 
+  it 'creates data directory properly' do
+    AcpcTableManager.load_config! config_data, pwd
+    AcpcTableManager.config.data_directory.must_equal "#{pwd}/tmp/db"
+    File.directory?(AcpcTableManager.config.data_directory).must_equal true
+  end
+
+  it 'creates its data files correctly' do
+    AcpcTableManager.load_config! config_data, pwd
+    AcpcTableManager.data_directory.must_equal "#{pwd}/tmp/db"
+    AcpcTableManager.exhibition_config.games.keys.each do |game|
+      AcpcTableManager.data_directory(game).must_equal "#{pwd}/tmp/db/#{game}"
+      File.directory?(AcpcTableManager.data_directory(game)).must_equal true
+
+      AcpcTableManager.enqueued_matches_file(game).must_equal "#{pwd}/tmp/db/#{game}/enqueued_matches.yml"
+      File.exist?(AcpcTableManager.enqueued_matches_file(game)).must_equal true
+      AcpcTableManager.enqueued_matches(game).length.must_equal 0
+
+      AcpcTableManager.running_matches_file(game).must_equal "#{pwd}/tmp/db/#{game}/running_matches.yml"
+      File.exist?(AcpcTableManager.running_matches_file(game)).must_equal true
+      AcpcTableManager.running_matches(game).length.must_equal 0
+    end
+  end
+
   describe 'ExhibitionConfig#bots' do
     it 'works properly' do
       AcpcTableManager.load_config! config_data, pwd
@@ -128,5 +150,16 @@ describe AcpcTableManager do
         ]
       )
     end
+  end
+
+  let(:match_info) do
+    {
+      'name' => 'match_name',
+      'game_def_key' => 'two_player_nolimit',
+      'players' => [
+        'ExamplePlayer',
+        'p2'
+      ]
+    }
   end
 end

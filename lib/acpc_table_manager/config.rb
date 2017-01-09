@@ -1,11 +1,6 @@
 require 'socket'
 require 'json'
-require 'mongoid'
-require 'moped'
-require 'rusen'
-require 'contextual_exceptions'
-require 'acpc_dealer'
-require 'redis'
+require 'fileutils'
 
 require_relative 'simple_logging'
 using AcpcTableManager::SimpleLogging::MessageFormatting
@@ -24,9 +19,21 @@ module AcpcTableManager
     THIS_MACHINE = Socket.gethostname
     DEALER_HOST = THIS_MACHINE
 
-    attr_reader :file, :log_directory, :my_log_directory, :match_log_directory, :proxy_pids_file
+    attr_reader(
+      :file,
+      :log_directory,
+      :my_log_directory,
+      :match_log_directory,
+      :data_directory
+    )
 
-    def initialize(file_path, log_directory_, match_log_directory_, proxy_pids_file_, interpolation_hash)
+    def initialize(
+        file_path,
+        log_directory_,
+        match_log_directory_,
+        data_directory_,
+        interpolation_hash
+    )
       @file = file_path
       JSON.parse(File.read(file_path)).each do |constant, val|
         define_singleton_method(constant.to_sym) do
@@ -36,8 +43,9 @@ module AcpcTableManager
       @log_directory = log_directory_
       @match_log_directory = match_log_directory_
       @my_log_directory = File.join(@log_directory, 'acpc_table_manager')
-      @proxy_pids_file = proxy_pids_file_
-      @logger = Logger.from_file_name(File.join(@my_log_directory, 'config.log'))
+      @logger = Logger.from_file_name(File.join(@my_log_directory, 'table_manager.log'))
+      @data_directory = data_directory_
+      FileUtils.mkdir_p @data_directory unless File.directory?(@data_directory)
     end
 
     def this_machine() THIS_MACHINE end
@@ -49,7 +57,11 @@ module AcpcTableManager
 
     attr_reader :file
 
-    def initialize(file_path, interpolation_hash, logger = Logger.new(STDOUT))
+    def initialize(
+      file_path,
+      interpolation_hash,
+      logger = Logger.new(STDOUT)
+    )
       @logger = logger
       @file = file_path
       JSON.parse(File.read(file_path)).each do |constant, val|
@@ -81,141 +93,19 @@ module AcpcTableManager
             bot_map
           end
         else
-          log(__method__, {warning: "Game '#{game_def_key}' has no opponents."}, Logger::Severity::WARN)
+          log(
+            __method__, {warning: "Game '#{game_def_key}' has no opponents."},
+            Logger::Severity::WARN
+          )
           {}
         end
       else
-        log(__method__, {warning: "Unrecognized game, '#{game_def_key}'."}, Logger::Severity::WARN)
+        log(
+          __method__, {warning: "Unrecognized game, '#{game_def_key}'."},
+          Logger::Severity::WARN
+        )
         {}
       end
     end
-  end
-
-  class UninitializedError < StandardError
-    include ContextualExceptions::ContextualError
-  end
-
-  def self.raise_uninitialized
-    raise UninitializedError.new(
-      "Unable to complete with AcpcTableManager uninitialized. Please initialize AcpcTableManager with configuration settings by calling AcpcTableManager.load! with a (YAML) configuration file name."
-    )
-  end
-
-  @@config = nil
-
-  def self.config
-    if @@config
-      @@config
-    else
-      raise_uninitialized
-    end
-  end
-
-  @@exhibition_config = nil
-  def self.exhibition_config
-    if @@exhibition_config
-      @@exhibition_config
-    else
-      raise_uninitialized
-    end
-  end
-
-  @@is_initialized = false
-
-  @@redis_config_file = nil
-  def self.redis_config_file() @@redis_config_file end
-
-  @@redis = nil
-  def self.redis() @@redis end
-
-  @@config_file = nil
-  def self.config_file() @@config_file end
-
-  @@notifier = nil
-  def self.notifier() @@notifier end
-
-  def self.load_config!(config_data, yaml_directory = File.pwd)
-    interpolation_hash = {
-      pwd: yaml_directory,
-      home: Dir.home,
-      :~ => Dir.home,
-      dealer_directory: AcpcDealer::DEALER_DIRECTORY
-    }
-    config = interpolate_all_strings(config_data, interpolation_hash)
-
-    @@config = Config.new(
-      config['table_manager_constants'],
-      config['log_directory'],
-      config['match_log_directory'],
-      config['proxy_pids_file'],
-      interpolation_hash
-    )
-    @@exhibition_config = ExhibitionConfig.new(
-      config['exhibition_constants'],
-      interpolation_hash,
-      Logger.from_file_name(File.join(@@config.my_log_directory, 'exhibition_config.log'))
-    )
-
-    # Moped.logger = Logger.from_file_name(File.join(@@config.log_directory, 'moped.log'))
-    # Mongoid.logger = Logger.from_file_name(File.join(@@config.log_directory, 'mongoid.log'))
-    # TODO: These should be set in configuration files
-    Moped.logger.level = ::Logger::FATAL
-    Mongoid.logger.level = ::Logger::FATAL
-    Mongoid.load!(config['mongoid_config'], config['mongoid_env'].to_sym)
-
-    if config['error_report']
-      Rusen.settings.sender_address = config['error_report']['sender']
-      Rusen.settings.exception_recipients = config['error_report']['recipients']
-
-      Rusen.settings.outputs = config['error_report']['outputs'] || [:pony]
-      Rusen.settings.sections = config['error_report']['sections'] || [:backtrace]
-      Rusen.settings.email_prefix = config['error_report']['email_prefix'] || '[ERROR] '
-      Rusen.settings.smtp_settings = config['error_report']['smtp']
-
-      @@notifier = Rusen
-    else
-      @@config.log(__method__, {warning: "Email reporting disabled. Please set email configuration to enable this feature."}, Logger::Severity::WARN)
-    end
-
-    if config['redis_config_file']
-      @@redis_config_file = config['redis_config_file']
-      redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
-      dflt = redis_config[:default].symbolize_keys
-      @@redis = Redis.new(
-        if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
-          dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
-        else
-          dflt
-        end
-      )
-    end
-
-    @@is_initialized = true
-  end
-
-  def self.load!(config_file_path)
-    @@config_file = config_file_path
-    load_config! YAML.load_file(config_file_path), File.dirname(config_file_path)
-  end
-
-  def self.notify(exception)
-    @@notifier.notify(exception) if @@notifier
-  end
-
-  def self.initialized?
-    @@is_initialized
-  end
-
-  def self.raise_if_uninitialized
-    raise_uninitialized unless initialized?
-  end
-
-  def self.new_log(log_file_name)
-    raise_if_uninitialized
-    Logger.from_file_name(File.join(@@config.my_log_directory, log_file_name)).with_metadata!
-  end
-
-  def self.unload!
-    @@is_initialized = false
   end
 end

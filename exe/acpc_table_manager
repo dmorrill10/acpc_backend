@@ -1,61 +1,59 @@
 #!/usr/bin/env ruby
 
+require 'acpc_dealer'
 require 'acpc_table_manager'
 require 'redis'
 require 'json'
 require 'optparse'
-require 'acpc_table_manager/match'
-
+require 'yaml'
 
 ARGV << '-h' if ARGV.empty?
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: #{$0} [options]"
+  opts.banner = "Usage: #{$PROGRAM_NAME} [options]"
 
-  opts.on_tail("-h", "--help", "Show this message") do
+  opts.on_tail('-h', '--help', 'Show this message') do
     puts opts
     exit
   end
 
-  opts.on("-t", "--table_manager TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
+  opts.on('-t', '--table_manager TABLE MANAGER CONFIG', 'Table manager configuration file.') do |c|
     options[:table_manager_config] = File.expand_path c, Dir.pwd
   end
 end.parse!
 
-raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
+raise OptionParser::MissingArgument, 'TABLE MANAGER CONFIG' unless options[:table_manager_config]
 
-raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
+raise OptionParser::ArgumentError, "#{options[:table_manager_config]} doesn't exist." unless File.exist?(options[:table_manager_config])
 
 CONFIG_FILE = options[:table_manager_config]
 
 AcpcTableManager.load! CONFIG_FILE
 table_manager = AcpcTableManager::Maintainer.new
 
-Signal.trap("INT") { exit }
-Signal.trap("TERM") { exit }
+Signal.trap('INT') { exit }
+Signal.trap('TERM') { exit }
 
 loop do
   begin
-    message = AcpcTableManager.redis.blpop("table-manager", :timeout => AcpcTableManager.config.maintenance_interval_s)
-    if message
-      data = JSON.parse message[1]
-      table_manager.log(__method__, {data: data})
+    AcpcTableManager.redis.subscribe_with_timeout(
+      AcpcTableManager.config.maintenance_interval_s,
+      'table-manager'
+    ) do |on|
+      on.message do |channel, message|
+        match_info = JSON.parse message
+        AcpcTableManager.config.log(__method__, match_info: match_info)
 
-      case data['request']
-      when AcpcTableManager.config.check_matches
-      when AcpcTableManager.config.kill_match
-        match = AcpcTableManager::Match.quiet_find data['params'][AcpcTableManager.config.match_id_key]
-        if match then match.kill_proxy! end
-      when 'reload'
-        AcpcTableManager.load! CONFIG_FILE
-      else
-        raise StandardError.new("Unrecognized request: #{data['request']}")
+        raise "No match information provided in message, \"#{message}\" sent on channel, \"#{channel}\"." unless match_info
+
+        enqueue_match match_info
+        start_match_if_allowed
       end
     end
-    table_manager.maintain!
+    start_match_if_allowed
   rescue => e
-    table_manager.log(
+    AcpcTableManager.config.log(
       __method__,
       {
         message: e.message,
