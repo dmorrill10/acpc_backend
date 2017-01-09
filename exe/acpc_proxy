@@ -17,16 +17,24 @@ OptionParser.new do |opts|
     exit
   end
 
-  opts.on("-m", "--match_id MATCH ID", "The ID of the match to join.") do |c|
-    options[:match_id] = c.strip
+  opts.on("-i", "--id ID", "This proxie's ID. Used as its messaging channel name.") do |c|
+    options[:id] = c
   end
   opts.on("-t", "--config TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
     options[:table_manager_config] = File.expand_path c, Dir.pwd
   end
+  opts.on("-p", "--port PORT", "The dealer port on which to connect.") do |c|
+    options[:port] = c.to_i
+  end
+  opts.on("-g", "--game GAME DEF KEY", "The game to be played.") do |c|
+    options[:game] = c.to_i
+  end
 end.parse!
 
-raise OptionParser::MissingArgument.new('MATCH ID') unless options[:match_id]
+raise OptionParser::MissingArgument.new('ID') unless options[:id]
+raise OptionParser::MissingArgument.new('PORT') unless options[:port]
 raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
+raise OptionParser::MissingArgument.new('GAME DEF KEY') unless options[:game]
 
 raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
 
@@ -34,14 +42,11 @@ CONFIG_FILE = options[:table_manager_config]
 
 AcpcTableManager.load! CONFIG_FILE
 
-match = begin
-  AcpcTableManager::Match.find options[:match_id]
-rescue Mongoid::Errors::DocumentNotFound
-  raise OptionParser::ArgumentError.new("Match \"#{options[:match_id]}\" doesn't exist.")
-end
-
-unless match.running? && !match.finished?
-  raise OptionParser::ArgumentError.new("Match \"#{options[:match_id]}\" is not running or has already finished.")
+game_info = AcpcTableManager.exhibition_config.games[options[:game]]
+unless game_info
+  raise OptionParser::ArgumentError.new(
+    "\"#{options[:game]}\" is not a recognized game. Registered games: #{AcpcTableManager.exhibition_config.games}."
+  )
 end
 
 Signal.trap("INT") { exit }
@@ -52,53 +57,45 @@ must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 last_message_received = Time.now
 
 begin
-  proxy = AcpcTableManager::Proxy.start match, must_send_ready
-  proxy.log __method__, options
+  proxy = AcpcTableManager::Proxy.start game_info, port, must_send_ready
+  proxy.log __method__, options: options, must_send_ready: must_send_ready
   loop do
-    message = AcpcTableManager.redis.blpop(
-      "#{AcpcTableManager.config.player_action_channel_prefix}#{options[:match_id]}",
-      :timeout => AcpcTableManager.config.maintenance_interval_s
-    )
-    if message
-      data = JSON.parse message[1]
+    AcpcTableManager.redis.subscribe_with_timeout(
+      AcpcTableManager.config.maintenance_interval_s,
+      options[:id]
+    ) do |on|
+      on.message do |channel, message|
+      data = JSON.parse message
 
       proxy.log(__method__, {data: data})
 
       action = data[AcpcTableManager.config.action_key]
-      if (
-        AcpcTableManager.config.next_hand_request_code &&
-        action == AcpcTableManager.config.next_hand_request_code
-      )
+      if action == AcpcTableManager.config.next_hand_request_code
         proxy.next_hand!
       else
         proxy.play! action
       end
       last_message_received = Time.now
-    elsif !proxy.users_turn_to_act?
-      last_message_received = Time.now
-    elsif (
-      AcpcTableManager.config.proxy_timeout_s &&
-      (
-        Time.now > (
-          last_message_received + AcpcTableManager.config.proxy_timeout_s
-        )
+    end
+
+    exit if proxy.match_ended?
+  end
+  exit if proxy.match_ended?
+
+  # @todo Check if dealer still connected, send KA comment
+  elsif !proxy.users_turn_to_act?
+    last_message_received = Time.now
+  elsif (
+    AcpcTableManager.config.proxy_timeout_s &&
+    (
+      Time.now > (
+        last_message_received + AcpcTableManager.config.proxy_timeout_s
       )
     )
-      if AcpcTableManager.config.on_proxy_timeout == 'fold'
-        proxy.play_check_fold!
-      else
-        match = AcpcTableManager::Match.find options[:match_id]
-        match.proxy_pid = nil
-        match.dealer_pid = nil
-        match.save!
-        exit
-      end
-    end
-    match = AcpcTableManager::Match.find options[:match_id]
-    if proxy.match_ended? or !match.dealer_running?
-      match.proxy_pid = nil
-      match.dealer_pid = nil
-      match.save!
+  )
+    if AcpcTableManager.config.on_proxy_timeout == 'fold'
+      proxy.play_check_fold!
+    else
       exit
     end
   end

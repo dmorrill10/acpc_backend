@@ -20,16 +20,13 @@ class Proxy
 
   exceptions :unable_to_create_match_slice
 
-  def self.start(match, must_send_ready = false)
-    game_definition = GameDefinition.parse_file(match.game_definition_file_name)
-    match.game_def_hash = game_definition.to_h
-    match.save!
+  def self.start(id, game_info, seat, port, must_send_ready = false)
+    game_definition = GameDefinition.parse_file(game_info['file'])
 
     proxy = new(
-      match.id,
       match.sanitized_name,
       AcpcDealer::ConnectionInformation.new(
-        match.port_numbers[match.seat - 1],
+        port,
         ::AcpcTableManager.config.dealer_host
       ),
       match.seat - 1,

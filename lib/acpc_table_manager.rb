@@ -184,7 +184,22 @@ module AcpcTableManager
   end
 
   def self.running_matches(game)
-    YAML.load_file(running_matches_file(game)) || []
+    saved_matches = YAML.load_file(running_matches_file(game))
+    return [] unless saved_matches
+
+    checked_matches = []
+    saved_matches.each do |match|
+      if AcpcDealer::process_exists?(match[:dealer][:pid])
+        checked_matches << match
+      end
+    end
+    File.open(
+      running_matches_file(game),
+      'w'
+    ) do |f|
+      f.write YAML.dump(checked_matches)
+    end
+    checked_matches
   end
 
   def self.dealer_arguments(match_info)
@@ -306,10 +321,9 @@ module AcpcTableManager
     end
   end
 
-  # @todo Unfinished. Merge with start_proxy.
-  # @return [Array<Integer>] PIDs of the opponents started
-  def self.start_bot(id, bot_info, port, host = 'localhost')
-    args = [bot_info[:runner].to_s, host.to_s, port.to_s]
+  # @return [Integer] PIDs of the bot started
+  def self.start_bot(id, bot_info, port)
+    args = [bot_info[:runner].to_s, config.dealer_host.to_s, port.to_s]
     log_file = File.join(opponents_log_dir, "#{id}.log")
     command_to_run = args.join(' ')
 
