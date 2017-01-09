@@ -20,6 +20,9 @@ OptionParser.new do |opts|
   opts.on("-i", "--id ID", "This proxie's ID. Used as its messaging channel name.") do |c|
     options[:id] = c
   end
+  opts.on("-s", "--seat SEAT", "This proxie's seat at the table (zero indexed).") do |c|
+    options[:seat] = c.to_i
+  end
   opts.on("-t", "--config TABLE MANAGER CONFIG", "Table manager configuration file.") do |c|
     options[:table_manager_config] = File.expand_path c, Dir.pwd
   end
@@ -32,11 +35,13 @@ OptionParser.new do |opts|
 end.parse!
 
 raise OptionParser::MissingArgument.new('ID') unless options[:id]
+raise OptionParser::MissingArgument.new('SEAT') unless options[:seat]
 raise OptionParser::MissingArgument.new('PORT') unless options[:port]
 raise OptionParser::MissingArgument.new('TABLE MANAGER CONFIG') unless options[:table_manager_config]
 raise OptionParser::MissingArgument.new('GAME DEF KEY') unless options[:game]
 
 raise OptionParser::ArgumentError.new("#{options[:table_manager_config]} doesn't exist.") unless File.exist?(options[:table_manager_config])
+raise OptionParser::ArgumentError.new("SEAT must be non-negative, received #{options[:seat] } instead.") unless options[:seat] >= 0
 
 CONFIG_FILE = options[:table_manager_config]
 
@@ -57,7 +62,13 @@ must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 last_message_received = Time.now
 
 begin
-  proxy = AcpcTableManager::Proxy.start game_info, port, must_send_ready
+  proxy = AcpcTableManager::Proxy.start(
+    options[:id],
+    game_info,
+    options[:seat],
+    port,
+    must_send_ready
+  )
   proxy.log __method__, options: options, must_send_ready: must_send_ready
   loop do
     AcpcTableManager.redis.subscribe_with_timeout(
@@ -80,14 +91,12 @@ begin
 
     exit if proxy.match_ended?
   end
-  exit if proxy.match_ended?
-
-  # @todo Check if dealer still connected, send KA comment
+  if proxy.match_ended?
+    exit
   elsif !proxy.users_turn_to_act?
     last_message_received = Time.now
   elsif (
-    AcpcTableManager.config.proxy_timeout_s &&
-    (
+    AcpcTableManager.config.proxy_timeout_s && (
       Time.now > (
         last_message_received + AcpcTableManager.config.proxy_timeout_s
       )

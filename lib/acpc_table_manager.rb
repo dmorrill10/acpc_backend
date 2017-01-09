@@ -282,12 +282,15 @@ module AcpcTableManager
     match_info['players'].each_with_index do |player_name, i|
       if game_info['opponents'][player_name]
         start_bot(
-          participant_id(match_info['name'], player_name),
+          participant_id(match_info['name'], player_name, i),
           game_info['opponents'][player_name],
           port_numbers[i]
         )
       else
-        start_proxy participant_id(match_info['name'], player_name), port_numbers[i]
+        start_proxy(
+          participant_id(match_info['name'], player_name, i),
+          port_numbers[i]
+        )
       end
     end
   end
@@ -349,8 +352,8 @@ module AcpcTableManager
     end
   end
 
-  def self.participant_id(match_name, player)
-    "#{match_name}.#{player}"
+  def self.participant_id(match_name, player, seat)
+    shell_sanitize("#{match_name}.#{player}.#{seat}")
   end
 
   def self.available_special_ports(ports_in_use)

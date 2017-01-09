@@ -201,4 +201,10 @@ describe AcpcTableManager do
       ).must_equal true
     end
   end
+
+  describe '::participant_id' do
+    it 'works' do
+      AcpcTableManager.participant_id('my match', 'p1', 2).must_equal 'my_match.p1.2'
+    end
+  end
 end
