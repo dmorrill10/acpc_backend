@@ -34,6 +34,11 @@
       "num_players": 3
     }
   },
-  "rejoin_button_id": "rejoin",
-  "spectate_button_id_prefix": "spectate-"
+  "dealer_options": [
+    "--t_response 0",
+    "--t_hand 0",
+    "--t_per_hand 0",
+    "--t_ready 0",
+    "-a"
+  ]
 }

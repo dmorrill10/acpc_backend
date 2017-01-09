@@ -103,8 +103,6 @@ describe AcpcTableManager do
         'num_hands_per_match' => 3000
       }
     )
-    AcpcTableManager.exhibition_config.rejoin_button_id.must_equal "rejoin"
-    AcpcTableManager.exhibition_config.spectate_button_id_prefix.must_equal "spectate-"
   end
 
   it 'creates data directory properly' do

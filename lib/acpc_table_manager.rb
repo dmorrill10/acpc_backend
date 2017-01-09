@@ -185,20 +185,22 @@ module AcpcTableManager
   def self.start_dealer(match_info)
     config.log(
       __method__,
-      msg: "Starting dealer for match \"#{match_info['name']}\".",
+      msg: "Starting dealer for match \"#{match_info['name']}\"."
     )
 
     dealer_arguments = {
-      match_name: shell_sanitize(match_info['name'],
+      match_name: shell_sanitize(match_info['name']),
       game_def_file_name: Shellwords.escape(
         exhibition_config.games[match_info['game_def_key']]['file']
       ),
-      hands: Shellwords.escape(match_info['number_of_hands']),
+      hands: Shellwords.escape(
+        exhibition_config.games[match_info['game_def_key']]['num_hands_per_match']
+      ),
       random_seed: Shellwords.escape(match_info['random_seed'].to_s),
-      player_names: match['players'].map do |player|
+      player_names: (match_info['players'].map do |player|
         Shellwords.escape(player['name'].gsub(/\s+/, '_'))
-      end.join(' '),
-      options: match['dealer_options']
+      end.join(' ')),
+      options: exhibition_config.games[match_info['game_def_key']]['dealer_options']
     }
 
     port_numbers = match_info['players'].map do |player|
