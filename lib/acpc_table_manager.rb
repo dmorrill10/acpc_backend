@@ -9,7 +9,6 @@ require 'zaru'
 require_relative 'acpc_table_manager/version'
 require_relative 'acpc_table_manager/config'
 require_relative 'acpc_table_manager/monkey_patches'
-require_relative 'acpc_table_manager/proxy'
 require_relative 'acpc_table_manager/simple_logging'
 require_relative 'acpc_table_manager/utils'
 
