@@ -8,63 +8,40 @@ require_relative 'match_slice'
 require_relative 'config'
 
 module AcpcTableManager
-module TimeRefinement
-  refine Time.class() do
-    def now_as_string
-      now.strftime('%b%-d_%Y-at-%-H_%-M_%-S')
-    end
-  end
-end
-end
-using AcpcTableManager::TimeRefinement
-
-module AcpcTableManager
 class Match
-  include Mongoid::Document
-  include Mongoid::Timestamps::Updated
-
-  embeds_many :slices, class_name: "AcpcTableManager::MatchSlice"
-
   # Scopes
-  scope :old, ->(lifespan) do
-    where(:updated_at.lt => (Time.new - lifespan))
-  end
-  scope :inactive, ->(lifespan) do
-    started.and.old(lifespan)
-  end
-  scope :active_between, ->(lifespan, reference_time=Time.now) do
-    started.and.where(
-      { 'slices.updated_at' => { '$gt' => (reference_time - lifespan)}}
-    ).and.where(
-      { 'slices.updated_at' => { '$lt' => reference_time}}
-    )
-  end
-  scope :with_slices, ->(has_slices) do
-    where({ 'slices.0' => { '$exists' => has_slices }})
-  end
-  scope :started, -> { with_slices(true) }
-  scope :not_started, -> { with_slices(false) }
-  scope :ready_to_start, -> { where(ready_to_start: true) }
-  scope(
-    :possibly_running,
-    where(:proxy_pid.gt => 0).and.where(:dealer_pid.gt => 0)
-  )
-  # @return The matches to be started (have not been started and not
-  #   currently running) ordered from newest to oldest.
-  scope :queue, not_started.and.ready_to_start.desc(:updated_at)
-
-  index({ game_definition_key: 1 })
-  index({ proxy_pid: 1, dealer_pid: 1 })
-  index({ user_name: 1 })
+  # scope :old, ->(lifespan) do
+  #   where(:updated_at.lt => (Time.new - lifespan))
+  # end
+  # scope :inactive, ->(lifespan) do
+  #   started.and.old(lifespan)
+  # end
+  # scope :active_between, ->(lifespan, reference_time=Time.now) do
+  #   started.and.where(
+  #     { 'slices.updated_at' => { '$gt' => (reference_time - lifespan)}}
+  #   ).and.where(
+  #     { 'slices.updated_at' => { '$lt' => reference_time}}
+  #   )
+  # end
+  # scope :with_slices, ->(has_slices) do
+  #   where({ 'slices.0' => { '$exists' => has_slices }})
+  # end
+  # scope :started, -> { with_slices(true) }
+  # scope :not_started, -> { with_slices(false) }
+  # scope :ready_to_start, -> { where(ready_to_start: true) }
+  # scope(
+  #   :possibly_running,
+  #   where(:proxy_pid.gt => 0).and.where(:dealer_pid.gt => 0)
+  # )
+  # # @return The matches to be started (have not been started and not
+  # #   currently running) ordered from newest to oldest.
+  # scope :queue, not_started.and.ready_to_start.desc(:updated_at)
+  #
+  # index({ game_definition_key: 1 })
+  # index({ proxy_pid: 1, dealer_pid: 1 })
+  # index({ user_name: 1 })
 
   class << self
-    # @todo Move to AcpcDealer
-    def safe_kill(pid)
-      if pid && pid > 0
-        AcpcDealer::kill_process pid
-        sleep 1 # Give the process a chance to exit
-      end
-    end
     def kill_process_if_running(pid)
       if pid && pid > 0
         begin
@@ -228,29 +205,28 @@ class Match
   end
 
   # Schema
-  field :port_numbers, type: Array
-  field :random_seed, type: Integer, default: new_random_seed
-  field :last_slice_viewed, type: Integer, default: -1
-  field :dealer_pid, type: Integer, default: nil
-  field :proxy_pid, type: Integer, default: nil
-  field :ready_to_start, type: Boolean, default: false
-  field :unable_to_start_dealer, type: Boolean, default: false
-  field :dealer_options, type: String, default: (
-    [
-      '-a', # Append logs with the same name rather than overwrite
-      "--t_response 80000", # 80 seconds per action
-      '--t_hand -1',
-      '--t_per_hand -1'
-    ].join(' ')
-  )
-  include_name
-  include_name_from_user
-  include_user_name
-  include_game_definition
-  include_number_of_hands
-  include_opponent_names
-  include_seat
-
+  # field :port_numbers, type: Array
+  # field :random_seed, type: Integer, default: new_random_seed
+  # field :last_slice_viewed, type: Integer, default: -1
+  # field :dealer_pid, type: Integer, default: nil
+  # field :proxy_pid, type: Integer, default: nil
+  # field :ready_to_start, type: Boolean, default: false
+  # field :unable_to_start_dealer, type: Boolean, default: false
+  # field :dealer_options, type: String, default: (
+  #   [
+  #     '-a', # Append logs with the same name rather than overwrite
+  #     "--t_response 80000", # 80 seconds per action
+  #     '--t_hand -1',
+  #     '--t_per_hand -1'
+  #   ].join(' ')
+  # )
+  # include_name
+  # include_name_from_user
+  # include_user_name
+  # include_game_definition
+  # include_number_of_hands
+  # include_opponent_names
+  # include_seat
 
   def bots(dealer_host)
     bot_info_from_config_that_match_opponents = ::AcpcTableManager.exhibition_config.bots(game_definition_key, *opponent_names)

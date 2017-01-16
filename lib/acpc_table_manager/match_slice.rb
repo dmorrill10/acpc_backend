@@ -2,26 +2,26 @@ require_relative 'config'
 
 module AcpcTableManager
 class MatchSlice
-  field :hand_has_ended, type: Boolean
-  field :match_has_ended, type: Boolean
-  field :seat_with_dealer_button, type: Integer
-  field :seat_next_to_act, type: Integer
-  field :state_string, type: String
-  # Not necessary to be in the database, but more performant than processing on the
-  # Rails server
-  field :betting_sequence, type: String
-  field :pot_at_start_of_round, type: Integer
-  field :players, type: Array
-  field :minimum_wager_to, type: Integer
-  field :chip_contribution_after_calling, type: Integer
-  field :pot_after_call, type: Integer
-  field :is_users_turn_to_act, type: Boolean
-  field :legal_actions, type: Array
-  field :amount_to_call, type: Integer
-  field :messages, type: Array
+  # field :hand_has_ended, type: Boolean
+  # field :match_has_ended, type: Boolean
+  # field :seat_with_dealer_button, type: Integer
+  # field :seat_next_to_act, type: Integer
+  # field :state_string, type: String
+  # # Not necessary to be in the database, but more performant than processing on the
+  # # Rails server
+  # field :betting_sequence, type: String
+  # field :pot_at_start_of_round, type: Integer
+  # field :players, type: Array
+  # field :minimum_wager_to, type: Integer
+  # field :chip_contribution_after_calling, type: Integer
+  # field :pot_after_call, type: Integer
+  # field :is_users_turn_to_act, type: Boolean
+  # field :legal_actions, type: Array
+  # field :amount_to_call, type: Integer
+  # field :messages, type: Array
 
   def self.from_players_at_the_table!(patt, match_has_ended, match)
-    match.slices.create!(
+    {
       hand_has_ended: patt.hand_ended?,
       match_has_ended: match_has_ended,
       seat_with_dealer_button: patt.dealer_player.seat.to_i,
@@ -41,7 +41,7 @@ class MatchSlice
       is_users_turn_to_act: patt.users_turn_to_act?,
       legal_actions: patt.legal_actions.map { |action| action.to_s },
       amount_to_call: amount_to_call(patt.match_state, patt.game_def).to_i
-    )
+    }
   end
 
   def self.betting_sequence(match_state, game_def)
@@ -159,21 +159,11 @@ class MatchSlice
     state.players(game_def).amount_to_call(state.next_to_act(game_def))
   end
 
-  def users_turn_to_act?
-    self.is_users_turn_to_act
-  end
-  def hand_ended?
-    self.hand_has_ended
-  end
-  def match_ended?
-    self.match_has_ended
-  end
-
   private
 
   def self.adjust_action_amount(action, round, match_state, game_def)
     amount_to_over_hand = action.modifier
-    if amount_to_over_hand.blank?
+    if amount_to_over_hand.nil? || amount_to_over_hand.strip.empty?
       action
     else
       amount_to_over_round = (
