@@ -16,10 +16,18 @@
     "two_player_nolimit": {
       "label": "Heads-up No-limit Texas Hold'em",
       "max_num_matches": 2,
-      "num_hands_per_match": 100,
+      "num_hands_per_match": 10,
       "file": "%{dealer_directory}/holdem.nolimit.2p.reverse_blinds.game",
       "num_players": 2,
       "opponents": {
+        "TestingBot": {
+          "runner": "%{pwd}/../../exe/acpc_testing_bot",
+          "requires_special_port": false
+        },
+        "SpecialPortTestingBot": {
+          "runner": "%{pwd}/../../exe/acpc_testing_bot",
+          "requires_special_port": true
+        },
         "ExamplePlayer": {
           "runner": "%{dealer_directory}/example_player.nolimit.2p.sh",
           "requires_special_port": false

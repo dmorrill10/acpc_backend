@@ -85,8 +85,16 @@ describe AcpcTableManager do
         'label' => "Heads-up No-limit Texas Hold'em",
         'max_num_matches' => 2,
         'num_players' => 2,
-        'num_hands_per_match' => 100,
+        'num_hands_per_match' => 10,
         'opponents' => {
+          "TestingBot" => {
+            "runner" => File.join(File.dirname(__FILE__), 'support', '../../exe/acpc_testing_bot'),
+            "requires_special_port" => false
+          },
+          "SpecialPortTestingBot" => {
+            "runner" => File.join(File.dirname(__FILE__), 'support', '../../exe/acpc_testing_bot'),
+            "requires_special_port" => true
+          },
           'ExamplePlayer' => {
             'runner' => AcpcDealer::EXAMPLE_PLAYERS[2][:nolimit],
             'requires_special_port' => false

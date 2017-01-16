@@ -32,6 +32,41 @@ describe AcpcTableManager do
   let(:random_seed) { 9001 }
   let(:sanitized_players) { ['ExamplePlayer', 'human_player'] }
 
+  describe '::start_match' do
+    let(:players) { ['TestingBot', 'TestingBot'] }
+    it 'works' do
+      name = AcpcTableManager.match_name(
+        game_def_key: game,
+        players: players,
+        time: false
+      )
+      dealer_info, player_info = AcpcTableManager.start_match(
+        game,
+        name,
+        players,
+        random_seed,
+        players.map { |e| 0 }
+      )
+      AcpcDealer.process_exists?(dealer_info[:pid]).must_equal true
+      log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.log")
+      Timeout.timeout(2) do
+        while AcpcDealer.process_exists?(dealer_info[:pid])
+          sleep 0.1
+        end
+      end
+
+      File.exist?(log_file).must_equal true
+      File.open(File.expand_path("../support/#{name}.log", __FILE__)) do |xf|
+        File.open(log_file) do |f|
+          f.readlines.must_equal xf.readlines
+        end
+      end
+
+      log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.actions.log")
+      File.exist?(log_file).must_equal true
+    end
+  end
+
   describe '::start_dealer' do
     it 'works' do
       name = AcpcTableManager.match_name(
@@ -67,7 +102,7 @@ describe AcpcTableManager do
       ).must_equal(
         match_name: 'my_match',
         game_def_file_name: AcpcDealer::GAME_DEFINITION_FILE_PATHS[2][:nolimit],
-        hands: '100',
+        hands: '10',
         random_seed: '9001',
         player_names: 'ExamplePlayer human_player',
         options: [

@@ -24,6 +24,10 @@ module AcpcTableManager
   class MatchAlreadyEnqueued < StandardError
     include ContextualExceptions::ContextualError
   end
+  class NoBotRunner < StandardError
+    include ContextualExceptions::ContextualError
+  end
+
   module TimeRefinement
     refine Time.class() do
       def now_as_string
@@ -84,6 +88,7 @@ module AcpcTableManager
       dealer_directory: AcpcDealer::DEALER_DIRECTORY
     }
     config = interpolate_all_strings(config_data, interpolation_hash)
+    interpolation_hash[:pwd] = File.dirname(config['table_manager_constants'])
 
     @@config = Config.new(
       config['table_manager_constants'],
@@ -92,6 +97,8 @@ module AcpcTableManager
       config['data_directory'],
       interpolation_hash
     )
+
+    interpolation_hash[:pwd] = File.dirname(config['exhibition_constants'])
     @@exhibition_config = ExhibitionConfig.new(
       config['exhibition_constants'],
       interpolation_hash,
@@ -332,7 +339,11 @@ module AcpcTableManager
 
   # @return [Integer] PID of the bot started
   def self.start_bot(id, bot_info, port)
-    args = [bot_info[:runner].to_s, config.dealer_host.to_s, port.to_s]
+    runner = bot_info['runner'].to_s
+    if runner.nil? || runner.strip.empty?
+      raise NoBotRunner, %Q{Bot "#{id}" with info #{bot_info} has no runner.}
+    end
+    args = [runner, config.dealer_host.to_s, port.to_s]
     log_file = File.join(opponents_log_dir, "#{id}.log")
     command_to_run = args.join(' ')
 
@@ -430,14 +441,14 @@ module AcpcTableManager
     game,
     name,
     players,
-    port_numbers,
-    seed
+    seed,
+    port_numbers
   )
     dealer_info = start_dealer(
       game,
-      next_match[:name],
-      next_match[:players],
-      next_match[:random_seed],
+      name,
+      players,
+      seed,
       port_numbers
     )
     port_numbers = dealer_info[:port_numbers]
@@ -517,8 +528,8 @@ module AcpcTableManager
           game,
           next_match[:name],
           next_match[:players],
-          port_numbers,
-          next_match[:random_seed]
+          next_match[:random_seed],
+          port_numbers
         )
 
         running_matches_.push(
@@ -535,7 +546,7 @@ module AcpcTableManager
   def self.start_process(command, log_file = nil)
     config.log __method__, running_command: command
 
-    options = {}
+    options = {chdir: AcpcDealer::DEALER_DIRECTORY}
     if log_file
       options[[:err, :out]] = [log_file, File::CREAT|File::WRONLY]
     end
