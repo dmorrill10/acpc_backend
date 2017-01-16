@@ -1,7 +1,5 @@
 #!/usr/bin/env ruby
 
-require 'acpc_table_manager'
-
 module AcpcTableManager
   module ProxyUtils
 

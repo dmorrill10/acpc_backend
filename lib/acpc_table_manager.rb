@@ -5,6 +5,7 @@ require 'acpc_poker_types'
 require 'redis'
 require 'timeout'
 require 'zaru'
+require 'shellwords'
 
 require_relative 'acpc_table_manager/version'
 require_relative 'acpc_table_manager/config'
@@ -20,6 +21,17 @@ module AcpcTableManager
   class NoPortForDealerAvailable < StandardError
     include ContextualExceptions::ContextualError
   end
+  class MatchAlreadyEnqueued < StandardError
+    include ContextualExceptions::ContextualError
+  end
+  module TimeRefinement
+    refine Time.class() do
+      def now_as_string
+        now.strftime('%b%-d_%Y-at-%-H_%-M_%-S')
+      end
+    end
+  end
+  using AcpcTableManager::TimeRefinement
 
   def self.shell_sanitize(string)
     Zaru.sanitize!(Shellwords.escape(string.gsub(/\s+/, '_')))
@@ -193,28 +205,37 @@ module AcpcTableManager
         checked_matches << match
       end
     end
-    File.open(
-      running_matches_file(game),
-      'w'
-    ) do |f|
-      f.write YAML.dump(checked_matches)
+    if checked_matches.length != saved_matches.length
+      update_running_matches game, checked_matches
     end
     checked_matches
   end
 
-  def self.dealer_arguments(match_info)
+  def self.sanitized_player_names(names)
+    names.map { |name| Shellwords.escape(name.gsub(/\s+/, '_')) }
+  end
+
+  def match_name(players: nil, game_def_key: nil, time: true)
+    name = "match"
+    name += ".#{sanitized_player_names(players).join('.')}" if players
+    if game_def_key
+      name += ".#{game_def_key}.#{exhibition_config.games[game_def_key]['num_hands_per_match']}h"
+    end
+    name += ".#{Time.now_as_string}" if time
+    shell_sanitize name
+  end
+
+  def self.dealer_arguments(game, name, players, random_seed)
     {
-      match_name: shell_sanitize(match_info['name']),
+      match_name: shell_sanitize(name),
       game_def_file_name: Shellwords.escape(
-        exhibition_config.games[match_info['game_def_key']]['file']
+        exhibition_config.games[game]['file']
       ),
       hands: Shellwords.escape(
-        exhibition_config.games[match_info['game_def_key']]['num_hands_per_match']
+        exhibition_config.games[game]['num_hands_per_match']
       ),
-      random_seed: Shellwords.escape(match_info['random_seed'].to_s),
-      player_names: (match_info['players'].map do |name|
-        Shellwords.escape(name.gsub(/\s+/, '_'))
-      end.join(' ')),
+      random_seed: Shellwords.escape(random_seed.to_s),
+      player_names: sanitized_player_names(players).join(' '),
       options: exhibition_config.dealer_options
     }
   end
@@ -223,48 +244,31 @@ module AcpcTableManager
     exhibition_config.games[game_def_key]['opponents'][player_name].nil?
   end
 
-  def self.start_dealer(match_info, port_numbers)
+  def self.start_dealer(game, name, players, random_seed, port_numbers)
     config.log(
       __method__,
-      msg: "Starting dealer for match \"#{match_info['name']}\"."
+      msg: "Starting dealer for match \"#{name}\"."
     )
 
+    args = dealer_arguments(game, name, players, random_seed)
+
     config.log __method__, {
-      dealer_arguments: dealer_arguments(match_info),
+      dealer_arguments: args,
       log_directory: ::AcpcTableManager.config.match_log_directory,
       port_numbers: port_numbers,
       command: AcpcDealer::DealerRunner.command(
-        dealer_arguments(match_info),
+        args,
         port_numbers
       )
     }
 
     Timeout::timeout(3) do
       AcpcDealer::DealerRunner.start(
-        dealer_arguments(match_info),
+        args,
         config.match_log_directory,
         port_numbers
       )
     end
-  end
-
-  def self.start_process(command, log_file = nil)
-    config.log __method__, running_command: command
-
-    options = {}
-    if log_file
-      options[[:err, :out]] = [log_file, File::CREAT|File::WRONLY]
-    end
-
-    pid = Timeout.timeout(3) do
-      pid = Process.spawn(command, options)
-      Process.detach(pid)
-      pid
-    end
-
-    config.log __method__, ran_command: command, pid: pid
-
-    pid
   end
 
   def self.start_proxy(proxy_id, port)
@@ -279,15 +283,16 @@ module AcpcTableManager
   end
 
   def self.start_players(match_info, game_info, port_numbers)
+    pids = []
     match_info['players'].each_with_index do |player_name, i|
       if game_info['opponents'][player_name]
-        start_bot(
+        pids << start_bot(
           participant_id(match_info['name'], player_name, i),
           game_info['opponents'][player_name],
           port_numbers[i]
         )
       else
-        start_proxy(
+        pids << start_proxy(
           participant_id(match_info['name'], player_name, i),
           port_numbers[i]
         )
@@ -297,34 +302,35 @@ module AcpcTableManager
 
   # @todo Test all below methods
 
-  def self.bots(game_def_key, player_names, dealer_host)
-    bot_info_from_config_that_match_opponents = exhibition_config.bots(
-      game_def_key,
-      *opponent_names(player_names)
-    )
-    bot_opponent_ports = opponent_ports_with_condition do |name|
-      bot_info_from_config_that_match_opponents.keys.include? name
-    end
+  # @todo This method looks broken
+  # def self.bots(game_def_key, player_names, dealer_host)
+  #   bot_info_from_config_that_match_opponents = exhibition_config.bots(
+  #     game_def_key,
+  #     *opponent_names(player_names)
+  #   )
+  #   bot_opponent_ports = opponent_ports_with_condition do |name|
+  #     bot_info_from_config_that_match_opponents.keys.include? name
+  #   end
+  #
+  #   raise unless (
+  #     port_numbers.length == player_names.length ||
+  #     bot_opponent_ports.length == bot_info_from_config_that_match_opponents.length
+  #   )
+  #
+  #   bot_opponent_ports.zip(
+  #     bot_info_from_config_that_match_opponents.keys,
+  #     bot_info_from_config_that_match_opponents.values
+  #   ).reduce({}) do |map, args|
+  #     port_num, name, info = args
+  #     map[name] = {
+  #       runner: (if info['runner'] then info['runner'] else info end),
+  #       host: dealer_host, port: port_num
+  #     }
+  #     map
+  #   end
+  # end
 
-    raise unless (
-      port_numbers.length == player_names.length ||
-      bot_opponent_ports.length == bot_info_from_config_that_match_opponents.length
-    )
-
-    bot_opponent_ports.zip(
-      bot_info_from_config_that_match_opponents.keys,
-      bot_info_from_config_that_match_opponents.values
-    ).reduce({}) do |map, args|
-      port_num, name, info = args
-      map[name] = {
-        runner: (if info['runner'] then info['runner'] else info end),
-        host: dealer_host, port: port_num
-      }
-      map
-    end
-  end
-
-  # @return [Integer] PIDs of the bot started
+  # @return [Integer] PID of the bot started
   def self.start_bot(id, bot_info, port)
     args = [bot_info[:runner].to_s, config.dealer_host.to_s, port.to_s]
     log_file = File.join(opponents_log_dir, "#{id}.log")
@@ -341,19 +347,32 @@ module AcpcTableManager
     start_process command_to_run, log_file
   end
 
-  def self.enqueue_match(match_info)
-    enqueued_matches_ = enqueued_matches(match_info['game_def_key'])
-    enqueued_matches_ << match_info
-    File.open(
-      enqueued_matches_file(match_info['game_def_key']),
-      'w'
-    ) do |f|
-      f.write YAML.dump(enqueued_matches_)
+  def self.enqueue_match(game, players, seed)
+    sanitized_name = match_name(
+      game_def_key: game,
+      players: players,
+      time: true
+    )
+    enqueued_matches_ = enqueued_matches game
+    if enqueued_matches_.any? { |e| e[:name] == sanitized_name }
+      raise(
+        MatchAlreadyEnqueued,
+        %Q{Match "#{sanitized_name}" already enqueued.}
+      )
     end
+    enqueued_matches_ << (
+      {
+        name: sanitized_name,
+        game_def_key: game,
+        players: sanitized_player_names(players),
+        random_seed: seed
+      }
+    )
+    update_enqueued_matches game, enqueued_matches_
   end
 
-  def self.participant_id(match_name, player, seat)
-    shell_sanitize("#{match_name}.#{player}.#{seat}")
+  def self.participant_id(name, player, seat)
+    shell_sanitize("#{name}.#{player}.#{seat}")
   end
 
   def self.available_special_ports(ports_in_use)
@@ -378,80 +397,157 @@ module AcpcTableManager
     port_
   end
 
-  def self.start_match_if_allowed
-    exhibition_config.games.each do |game, info|
+  def self.start_matches_if_allowed(game)
+    if game
       running_matches_ = running_matches(game)
       skipped_matches = []
-      enqueued_matches_ = nil
-      while running_matches_.length < info['max_num_matches']
-        enqueued_matches_ ||= enqueued_matches(game)
-        next_match = enqueued_matches_.shift
-        break unless next_match
-
-        ports_in_use = running_matches_.map do |m|
-          m[:dealer][:port_numbers]
-        end.flatten
-
-        begin
-          port_numbers = next_match['players'].map do |player|
-            bot_info = info['opponents'][player]
-            if bot_info && bot_info['requires_special_port']
-              port_numbers << next_special_port(ports_in_use)
-            else
-              port_numbers << 0
-            end
-          end
-
-          dealer_info = start_dealer next_match, port_numbers
-          proxy_pids = start_players(
-            next_match,
-            info,
-            dealer_info['port_numbers']
-          )
-
-          proxies = []
-          proxy_pids.each_with_index do |pid, i|
-            proxies.push(
-              name: next_match['proxies'][i],
-              pid: pid
-            )
-          end
-
-          running_matches_.push(
-            name: next_match['name'],
-            dealer: dealer_info,
-            proxies: proxies
-          )
-          File.open(started_matches_file(game), 'w') do |f|
-            f.write YAML.dump(running_matches_)
-          end
-
-          File.open(
-            enqueued_matches_file(match_info['game_def_key']),
-            'w'
-          ) do |f|
-            f.write YAML.dump(enqueued_matches_)
-          end
-        rescue NoPortForDealerAvailable => e
-          config.log(
-            __method__,
-            {
-              message: e.message,
-              backtrace: e.backtrace
-            },
-            Logger::Severity::WARN
-          )
-          skipped_matches << next_match
-        end
-      end
-      unless enqueued_matches_.nil?
-        File.open(
-          enqueued_matches_file(match_info['game_def_key']),
-          'w'
-        ) do |f|
-          f.write YAML.dump(skipped_matches + enqueued_matches_)
-        end
+      enqueued_matches_ = enqueued_matches(game)
+      start_matches_in_game_if_allowed(
+        game,
+        running_matches_,
+        skipped_matches,
+        enqueued_matches_
+      )
+    else
+      exhibition_config.games.keys.each do |game|
+        start_matches_if_allowed game
       end
     end
+    unless enqueued_matches_.empty? && skipped_matches.empty?
+      update_enqueued_matches game, skipped_matches + enqueued_matches_
+    end
+  end
+
+  def self.update_enqueued_matches(game, enqueued_matches_)
+    write_yml enqueued_matches_file(game), enqueued_matches_
+  end
+
+  def self.update_running_matches(game, running_matches_)
+    write_yml running_matches_file(game), running_matches_
+  end
+
+  def self.start_match(
+    game,
+    name,
+    players,
+    port_numbers,
+    seed
+  )
+    dealer_info = start_dealer(
+      game,
+      next_match[:name],
+      next_match[:players],
+      next_match[:random_seed],
+      port_numbers
+    )
+    port_numbers = dealer_info[:port_numbers]
+
+    player_info = []
+    players.each_with_index do |player_name, i|
+      player_info << (
+        {
+          name: player_name,
+          pid: (
+            if exhibition_config.games[game]['opponents'][player_name]
+              start_bot(
+                participant_id(name, player_name, i),
+                exhibition_config.games[game]['opponents'][player_name],
+                port_numbers[i]
+              )
+            else
+              start_proxy(
+                participant_id(name, player_name, i),
+                port_numbers[i]
+              )
+            end
+          )
+        }
+      )
+    end
+    return dealer_info, player_info
+  end
+
+  def allocate_ports(players, game, ports_in_use)
+    players.map do |player|
+      bot_info = exhibition_config.games[game]['opponents'][player]
+      if bot_info && bot_info['requires_special_port']
+        special_port = next_special_port(ports_in_use)
+        ports_in_use << special_port
+        port_numbers << special_port
+      else
+        port_numbers << 0
+      end
+    end
+  end
+
+  private
+
+  def self.write_yml(f, obj)
+    File.open(f, 'w') { |f| f.write YAML.dump(obj) }
+  end
+
+  def self.start_matches_in_game_if_allowed(
+    game,
+    running_matches_,
+    skipped_matches,
+    enqueued_matches_
+  )
+    while running_matches_.length < info['max_num_matches']
+      next_match = enqueued_matches_.shift
+      break unless next_match
+
+      ports_in_use = running_matches_.map do |m|
+        m[:dealer][:port_numbers]
+      end.flatten
+
+      begin
+        port_numbers = allocate_ports(next_match[:players], game, ports_in_use)
+      rescue NoPortForDealerAvailable => e
+        config.log(
+          __method__,
+          {
+            message: e.message,
+            backtrace: e.backtrace
+          },
+          Logger::Severity::WARN
+        )
+        skipped_matches << next_match
+      else
+        dealer_info, player_info = start_match(
+          game,
+          next_match[:name],
+          next_match[:players],
+          port_numbers,
+          next_match[:random_seed]
+        )
+
+        running_matches_.push(
+          name: next_match[:name],
+          dealer: dealer_info,
+          players: player_info
+        )
+        update_running_matches game, running_matches_
+        update_enqueued_matches game, enqueued_matches_
+      end
+    end
+  end
+
+  def self.start_process(command, log_file = nil)
+    config.log __method__, running_command: command
+
+    options = {}
+    if log_file
+      options[[:err, :out]] = [log_file, File::CREAT|File::WRONLY]
+    end
+
+    pid = Timeout.timeout(3) do
+      pid = Process.spawn(command, options)
+      Process.detach(pid)
+      pid
+    end
+
+    config.log __method__, ran_command: command, pid: pid
+
+    pid
   end
 end
