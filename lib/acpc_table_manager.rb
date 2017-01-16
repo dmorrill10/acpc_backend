@@ -215,7 +215,7 @@ module AcpcTableManager
     names.map { |name| Shellwords.escape(name.gsub(/\s+/, '_')) }
   end
 
-  def match_name(players: nil, game_def_key: nil, time: true)
+  def self.match_name(players: nil, game_def_key: nil, time: true)
     name = "match"
     name += ".#{sanitized_player_names(players).join('.')}" if players
     if game_def_key

@@ -1,13 +1,7 @@
-require 'mongoid'
 require_relative 'config'
 
 module AcpcTableManager
 class MatchSlice
-  include Mongoid::Document
-  include Mongoid::Timestamps::Updated
-
-  embedded_in :match, inverse_of: :slices
-
   field :hand_has_ended, type: Boolean
   field :match_has_ended, type: Boolean
   field :seat_with_dealer_button, type: Integer

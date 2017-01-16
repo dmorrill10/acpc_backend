@@ -1,4 +1,3 @@
-require 'mongoid'
 require 'zaru'
 
 require 'acpc_poker_types/game_definition'
