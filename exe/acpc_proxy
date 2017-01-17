@@ -78,7 +78,10 @@ begin
     port,
     must_send_ready
   ) do |patt|
-    AcpcTableManager.redis.publish @sending_channel, to_json(patt)
+    AcpcTableManager.redis.publish(
+      @sending_channel,
+      ProxyUtils.proxy_to_json(patt)
+    )
   end
 
   loop do
@@ -107,7 +110,10 @@ begin
         if proxy.users_turn_to_act?
           action = PokerAction.new(action) unless action.is_a?(PokerAction)
           proxy.play!(action) do |patt|
-            AcpcTableManager.redis.publish @sending_channel, to_json(patt)
+            AcpcTableManager.redis.publish(
+              @sending_channel,
+              ProxyUtils.proxy_to_json(patt)
+            )
           end
 
           log(

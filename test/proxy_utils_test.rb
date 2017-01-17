@@ -6,7 +6,7 @@ require 'acpc_poker_types/hand'
 require 'acpc_poker_types/players_at_the_table'
 
 require_relative '../lib/acpc_table_manager/config'
-require_relative '../lib/acpc_table_manager/match_slice'
+require_relative '../lib/acpc_table_manager/proxy_utils'
 
 module MapWithIndex
   refine Array do
@@ -25,10 +25,8 @@ using MapWithIndex
 include AcpcPokerTypes
 include AcpcTableManager
 
-describe MatchSlice do
-  def patient
-    @patient ||= MatchSlice
-  end
+describe ProxyUtils do
+  let(:patient) { ProxyUtils }
   describe 'chip_contribution_after_calling and ::amount_to_call' do
     it 'work after all-in' do
       game_def = GameDefinition.new(

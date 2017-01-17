@@ -27,6 +27,9 @@ module AcpcTableManager
   class NoBotRunner < StandardError
     include ContextualExceptions::ContextualError
   end
+  class RequiresTooManySpecialPorts < StandardError
+    include ContextualExceptions::ContextualError
+  end
 
   module TimeRefinement
     refine Time.class() do
@@ -397,9 +400,7 @@ module AcpcTableManager
   def self.next_special_port(ports_in_use)
     available_ports_ = available_special_ports(ports_in_use)
     port_ = available_ports_.pop
-    until AcpcDealer.port_available?(port_)
-      port_ = nil
-      break if available_ports_.empty?
+    until port_.nil? || AcpcDealer.port_available?(port_)
       port_ = available_ports_.pop
     end
     unless port_
@@ -478,10 +479,23 @@ module AcpcTableManager
     return dealer_info, player_info
   end
 
-  def allocate_ports(players, game, ports_in_use)
+  def self.allocate_ports(players, game, ports_in_use)
+    num_special_ports_for_this_match = 0
+    max_num_special_ports = if exhibition_config.special_ports_to_dealer.nil?
+      0
+    else
+      exhibition_config.special_ports_to_dealer.length
+    end
     players.map do |player|
       bot_info = exhibition_config.games[game]['opponents'][player]
       if bot_info && bot_info['requires_special_port']
+        num_special_ports_for_this_match += 1
+        if num_special_ports_for_this_match > max_num_special_ports
+          raise(
+            RequiresTooManySpecialPorts,
+            %Q{At least #{num_special_ports_for_this_match} special ports are required but only #{max_num_special_ports} ports were declared.}
+          )
+        end
         special_port = next_special_port(ports_in_use)
         ports_in_use << special_port
         special_port
@@ -523,6 +537,15 @@ module AcpcTableManager
           Logger::Severity::WARN
         )
         skipped_matches << next_match
+      rescue RequiresTooManySpecialPorts => e
+        config.log(
+          __method__,
+          {
+            message: e.message,
+            backtrace: e.backtrace
+          },
+          Logger::Severity::ERROR
+        )
       else
         dealer_info, player_info = start_match(
           game,
@@ -538,8 +561,8 @@ module AcpcTableManager
           players: player_info
         )
         update_running_matches game, running_matches_
-        update_enqueued_matches game, enqueued_matches_
       end
+      update_enqueued_matches game, enqueued_matches_
     end
   end
 

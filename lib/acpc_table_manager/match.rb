@@ -3,8 +3,6 @@ require 'zaru'
 require 'acpc_poker_types/game_definition'
 require 'acpc_poker_types/match_state'
 require 'acpc_dealer'
-
-require_relative 'match_slice'
 require_relative 'config'
 
 module AcpcTableManager

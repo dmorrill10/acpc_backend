@@ -28,18 +28,13 @@ describe AcpcTableManager do
   end
 
   let(:game) { 'two_player_nolimit' }
-  let(:players) { ['ExamplePlayer', 'human player'] }
   let(:random_seed) { 9001 }
-  let(:sanitized_players) { ['ExamplePlayer', 'human_player'] }
 
   describe '::start_match' do
-    let(:players) { ['TestingBot', 'TestingBot'] }
     it 'works' do
-      name = AcpcTableManager.match_name(
-        game_def_key: game,
-        players: players,
-        time: false
-      )
+      players = ['TestingBot', 'TestingBot']
+
+      name = match_name(players)
       dealer_info, player_info = AcpcTableManager.start_match(
         game,
         name,
@@ -70,11 +65,8 @@ describe AcpcTableManager do
 
   describe '::start_dealer' do
     it 'works' do
-      name = AcpcTableManager.match_name(
-        game_def_key: game,
-        players: players,
-        time: false
-      )
+      players = ['ExamplePlayer', 'human player']
+      name = match_name(players)
       dealer_info = AcpcTableManager.start_dealer(
         game,
         name,
@@ -95,6 +87,8 @@ describe AcpcTableManager do
 
   describe '::dealer_arguments' do
     it 'works' do
+      players = ['ExamplePlayer', 'human player']
+
       AcpcTableManager.dealer_arguments(
         game,
         'my match',
@@ -136,17 +130,18 @@ describe AcpcTableManager do
     end
   end
 
-  describe '::start_matches_if_allowed, ::enqueued_matches, and ::running_matches together' do
-    let(:players) { ['TestingBot', 'TestingBot'] }
-    let(:match_name) do
-      AcpcTableManager.match_name(
-        game_def_key: game,
-        players: players,
-        time: false
-      )
-    end
+  def match_name(players)
+    AcpcTableManager.match_name(
+      game_def_key: game,
+      players: players,
+      time: false
+    )
+  end
 
+  describe '::start_matches_if_allowed, ::enqueued_matches, and ::running_matches together' do
     it 'works' do
+      players = ['TestingBot', 'TestingBot']
+
       AcpcTableManager.running_matches(game).length.must_equal 0
       AcpcTableManager.enqueue_match(
         game,
@@ -158,7 +153,7 @@ describe AcpcTableManager do
       patient = AcpcTableManager.running_matches(game)
       patient.length.must_equal 1
       AcpcDealer.process_exists?(patient.first[:dealer][:pid]).must_equal true
-      patient.first[:name].must_match /^#{match_name}/
+      patient.first[:name].must_match /^#{match_name(players)}/
       patient.first[:dealer][:port_numbers].length.must_equal players.length
       patient.first[:dealer][:log_directory].must_equal AcpcTableManager.config.match_log_directory
       patient.first[:players].length.must_equal players.length
@@ -177,8 +172,58 @@ describe AcpcTableManager do
     end
   end
 
+  it 'works with a special port' do
+    players = ['SpecialPortTestingBot', 'TestingBot']
+
+    AcpcTableManager.running_matches(game).length.must_equal 0
+    AcpcTableManager.enqueue_match(
+      game,
+      players,
+      random_seed
+    )
+    AcpcTableManager.start_matches_if_allowed
+
+    patient = AcpcTableManager.running_matches(game)
+    patient.length.must_equal 1
+    AcpcDealer.process_exists?(patient.first[:dealer][:pid]).must_equal true
+    patient.first[:name].must_match /^#{match_name(players)}/
+    patient.first[:dealer][:port_numbers].length.must_equal players.length
+    patient.first[:dealer][:port_numbers].first.must_equal 19001
+    patient.first[:dealer][:log_directory].must_equal AcpcTableManager.config.match_log_directory
+    patient.first[:players].length.must_equal players.length
+    patient.first[:players].each_with_index do |player, i|
+      player[:name].must_equal players[i]
+      player[:pid].must_be :>, 0
+    end
+
+    Timeout.timeout(2) do
+      while AcpcDealer.process_exists?(patient.first[:dealer][:pid])
+        sleep 0.1
+      end
+    end
+
+    AcpcTableManager.running_matches(game).length.must_equal 0
+  end
+
+  it 'adjusts when too many agents need special ports' do
+    players = ['SpecialPortTestingBot', 'SpecialPortTestingBot']
+
+    AcpcTableManager.running_matches(game).length.must_equal 0
+    AcpcTableManager.enqueue_match(
+      game,
+      players,
+      random_seed
+    )
+    AcpcTableManager.start_matches_if_allowed
+    AcpcTableManager.running_matches(game).length.must_equal 0
+    AcpcTableManager.enqueued_matches(game).length.must_equal 0
+  end
+
   describe '::enqueue_match' do
     it 'works' do
+      players = ['ExamplePlayer', 'human player']
+      sanitized_players = ['ExamplePlayer', 'human_player']
+
       AcpcTableManager.enqueued_matches(game).length.must_equal 0
       AcpcTableManager.enqueue_match(
         game,
@@ -193,6 +238,7 @@ describe AcpcTableManager do
       patient.first[:random_seed].must_equal random_seed
     end
     it 'will not enqueue two matches with the same name' do
+      players = ['ExamplePlayer', 'human player']
       AcpcTableManager.enqueued_matches(game).length.must_equal 0
       AcpcTableManager.enqueue_match(
         game,

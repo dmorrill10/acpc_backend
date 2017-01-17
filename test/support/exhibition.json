@@ -48,5 +48,6 @@
     "--t_per_hand 0",
     "--t_ready 0",
     "-a"
-  ]
+  ],
+  "special_ports_to_dealer": [19001]
 }
