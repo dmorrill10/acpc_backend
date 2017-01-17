@@ -219,6 +219,48 @@ describe AcpcTableManager do
     AcpcTableManager.enqueued_matches(game).length.must_equal 0
   end
 
+  it 'adjusts when too many agents in multiple matches need special ports' do
+    players = ['SpecialPortTestingBot', 'TestingBot']
+
+    AcpcTableManager.running_matches(game).length.must_equal 0
+    AcpcTableManager.enqueue_match(
+      game,
+      players,
+      random_seed
+    )
+    sleep 1
+    AcpcTableManager.enqueue_match(
+      game,
+      players,
+      random_seed
+    )
+    AcpcTableManager.enqueued_matches(game).length.must_equal 2
+    AcpcTableManager.start_matches_if_allowed
+    AcpcTableManager.running_matches(game).length.must_equal 1
+    AcpcTableManager.enqueued_matches(game).length.must_equal 1
+    AcpcTableManager.start_matches_if_allowed
+    patient = AcpcTableManager.running_matches(game)
+    patient.length.must_equal 1
+    AcpcTableManager.enqueued_matches(game).length.must_equal 1
+
+    Timeout.timeout(2) do
+      while AcpcDealer.process_exists?(patient.first[:dealer][:pid])
+        sleep 0.1
+      end
+    end
+    AcpcTableManager.start_matches_if_allowed
+    patient = AcpcTableManager.running_matches(game)
+    patient.length.must_equal 1
+    AcpcTableManager.enqueued_matches(game).length.must_equal 0
+
+    Timeout.timeout(2) do
+      while AcpcDealer.process_exists?(patient.first[:dealer][:pid])
+        sleep 0.1
+      end
+    end
+    AcpcTableManager.running_matches(game).length.must_equal 0
+  end
+
   describe '::enqueue_match' do
     it 'works' do
       players = ['ExamplePlayer', 'human player']
