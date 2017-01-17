@@ -48,13 +48,14 @@ describe AcpcTableManager do
         players.map { |e| 0 }
       )
       AcpcDealer.process_exists?(dealer_info[:pid]).must_equal true
-      log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.log")
+
       Timeout.timeout(2) do
         while AcpcDealer.process_exists?(dealer_info[:pid])
           sleep 0.1
         end
       end
 
+      log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.log")
       File.exist?(log_file).must_equal true
       File.open(File.expand_path("../support/#{name}.log", __FILE__)) do |xf|
         File.open(log_file) do |f|
@@ -132,6 +133,47 @@ describe AcpcTableManager do
   describe '::participant_id' do
     it 'works' do
       AcpcTableManager.participant_id('my match', 'p1', 2).must_equal 'my_match.p1.2'
+    end
+  end
+
+  describe '::running_matches' do
+    let(:players) { ['TestingBot', 'TestingBot'] }
+    let(:match_name) do
+      AcpcTableManager.match_name(
+        game_def_key: game,
+        players: players,
+        time: false
+      )
+    end
+
+    it 'works' do
+      AcpcTableManager.running_matches(game).length.must_equal 0
+      AcpcTableManager.enqueue_match(
+        game,
+        players,
+        random_seed
+      )
+      AcpcTableManager.start_matches_if_allowed
+
+      patient = AcpcTableManager.running_matches(game)
+      patient.length.must_equal 1
+      AcpcDealer.process_exists?(patient.first[:dealer][:pid]).must_equal true
+      patient.first[:name].must_match /^#{match_name}/
+      patient.first[:dealer][:port_numbers].length.must_equal players.length
+      patient.first[:dealer][:log_directory].must_equal AcpcTableManager.config.match_log_directory
+      patient.first[:players].length.must_equal players.length
+      patient.first[:players].each_with_index do |player, i|
+        player[:name].must_equal players[i]
+        player[:pid].must_be :>, 0
+      end
+
+      Timeout.timeout(2) do
+        while AcpcDealer.process_exists?(patient.first[:dealer][:pid])
+          sleep 0.1
+        end
+      end
+
+      AcpcTableManager.running_matches(game).length.must_equal 0
     end
   end
 

@@ -48,10 +48,10 @@ loop do
         raise "No match information provided in message, \"#{message}\" sent on channel, \"#{channel}\"." unless match_info
 
         enqueue_match match_info
-        start_match_if_allowed
+        start_matches_if_allowed
       end
     end
-    start_match_if_allowed
+    start_matches_if_allowed
   rescue => e
     AcpcTableManager.config.log(
       __method__,

@@ -408,7 +408,7 @@ module AcpcTableManager
     port_
   end
 
-  def self.start_matches_if_allowed(game)
+  def self.start_matches_if_allowed(game = nil)
     if game
       running_matches_ = running_matches(game)
       skipped_matches = []
@@ -419,13 +419,13 @@ module AcpcTableManager
         skipped_matches,
         enqueued_matches_
       )
+      unless enqueued_matches_.empty? && skipped_matches.empty?
+        update_enqueued_matches game, skipped_matches + enqueued_matches_
+      end
     else
       exhibition_config.games.keys.each do |game|
         start_matches_if_allowed game
       end
-    end
-    unless enqueued_matches_.empty? && skipped_matches.empty?
-      update_enqueued_matches game, skipped_matches + enqueued_matches_
     end
   end
 
@@ -484,9 +484,9 @@ module AcpcTableManager
       if bot_info && bot_info['requires_special_port']
         special_port = next_special_port(ports_in_use)
         ports_in_use << special_port
-        port_numbers << special_port
+        special_port
       else
-        port_numbers << 0
+        0
       end
     end
   end
@@ -503,7 +503,7 @@ module AcpcTableManager
     skipped_matches,
     enqueued_matches_
   )
-    while running_matches_.length < info['max_num_matches']
+    while running_matches_.length < exhibition_config.games[game]['max_num_matches']
       next_match = enqueued_matches_.shift
       break unless next_match
 
