@@ -30,7 +30,6 @@ raise OptionParser::ArgumentError, "#{options[:table_manager_config]} doesn't ex
 CONFIG_FILE = options[:table_manager_config]
 
 AcpcTableManager.load! CONFIG_FILE
-table_manager = AcpcTableManager::Maintainer.new
 
 Signal.trap('INT') { exit }
 Signal.trap('TERM') { exit }
@@ -47,7 +46,11 @@ loop do
 
         raise "No match information provided in message, \"#{message}\" sent on channel, \"#{channel}\"." unless match_info
 
-        enqueue_match match_info
+        enqueue_match(
+          match_info['game_def_key'],
+          match_info['players'],
+          match_info['random_seed']
+        )
         start_matches_if_allowed
       end
     end

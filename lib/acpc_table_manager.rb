@@ -130,15 +130,19 @@ module AcpcTableManager
 
     if config['redis_config_file']
       @@redis_config_file = config['redis_config_file']
-      redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
-      dflt = redis_config[:default].symbolize_keys
-      @@redis = Redis.new(
-        if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
-          dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
-        else
-          dflt
-        end
-      )
+      @@redis = if @@redis_config_file == 'default'
+        Redis.new
+      else
+        redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
+        dflt = redis_config[:default].symbolize_keys
+        Redis.new(
+          if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
+            dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
+          else
+            dflt
+          end
+        )
+      end
     end
     FileUtils.mkdir(opponents_log_dir) unless File.directory?(opponents_log_dir)
 

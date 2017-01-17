@@ -8,8 +8,6 @@ require_relative '../lib/acpc_table_manager/proxy_utils'
 
 # @todo Move into proxy_utils test
 
-def dont_run
-
 module MapWithIndex
   refine Array do
     def map_with_index
@@ -26,6 +24,8 @@ using MapWithIndex
 
 include AcpcPokerTypes
 include AcpcTableManager
+
+def dont_run
 
 describe MatchView do
   let (:state_string) { "#{MatchState::LABEL}:0:0::AhKs|" }

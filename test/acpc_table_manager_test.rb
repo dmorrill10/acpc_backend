@@ -9,7 +9,7 @@ describe AcpcTableManager do
 
   let (:config_data) { {
       'table_manager_constants' => '%{pwd}/support/table_manager.json',
-      'match_log_directory' => '%{pwd}/../tmp/log/match_logs',
+      'match_log_directory' => '%{pwd}/tmp/log/match_logs',
       'exhibition_constants' => '%{pwd}/support/exhibition.json',
       'log_directory' => '%{pwd}/tmp/log',
       'bots' => '%{pwd}/support/bots.yml',
@@ -153,7 +153,7 @@ describe AcpcTableManager do
       patient = AcpcTableManager.running_matches(game)
       patient.length.must_equal 1
       AcpcDealer.process_exists?(patient.first[:dealer][:pid]).must_equal true
-      patient.first[:name].must_match /^#{match_name(players)}/
+      patient.first[:name].must_match(/^#{match_name(players)}/)
       patient.first[:dealer][:port_numbers].length.must_equal players.length
       patient.first[:dealer][:log_directory].must_equal AcpcTableManager.config.match_log_directory
       patient.first[:players].length.must_equal players.length
@@ -186,7 +186,7 @@ describe AcpcTableManager do
     patient = AcpcTableManager.running_matches(game)
     patient.length.must_equal 1
     AcpcDealer.process_exists?(patient.first[:dealer][:pid]).must_equal true
-    patient.first[:name].must_match /^#{match_name(players)}/
+    patient.first[:name].must_match(/^#{match_name(players)}/)
     patient.first[:dealer][:port_numbers].length.must_equal players.length
     patient.first[:dealer][:port_numbers].first.must_equal 19001
     patient.first[:dealer][:log_directory].must_equal AcpcTableManager.config.match_log_directory
@@ -276,7 +276,7 @@ describe AcpcTableManager do
       patient.length.must_equal 1
       patient.first[:game_def_key].must_equal game
       patient.first[:players].must_equal sanitized_players
-      patient.first[:name].must_match /^match\.#{sanitized_players.join('\.')}\.#{game}/
+      patient.first[:name].must_match(/^match\.#{sanitized_players.join('\.')}\.#{game}/)
       patient.first[:random_seed].must_equal random_seed
     end
     it 'will not enqueue two matches with the same name' do

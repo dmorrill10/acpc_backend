@@ -5,7 +5,7 @@ require 'acpc_table_manager/config'
 describe AcpcTableManager do
   let (:config_data) { {
       'table_manager_constants' => '%{pwd}/support/table_manager.json',
-      'match_log_directory' => '%{pwd}/../tmp/log/match_logs',
+      'match_log_directory' => '%{pwd}/tmp/log/match_logs',
       'exhibition_constants' => '%{pwd}/support/exhibition.json',
       'log_directory' => '%{pwd}/tmp/log',
       'bots' => '%{pwd}/support/bots.yml',
