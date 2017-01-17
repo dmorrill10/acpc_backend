@@ -58,7 +58,7 @@ describe AcpcTableManager do
       File.exist?(log_file).must_equal true
       File.open(File.expand_path("../support/#{name}.log", __FILE__)) do |xf|
         File.open(log_file) do |f|
-          f.readlines.must_equal xf.readlines
+          f.readlines[1..-1].must_equal xf.readlines[1..-1]
         end
       end
 
