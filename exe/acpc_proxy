@@ -94,33 +94,40 @@ begin
 
       log __method__, data: data
 
-      action = data[AcpcTableManager.config.action_key]
-      if action == AcpcTableManager.config.next_hand_request_code
-        proxy.next_hand!
-
-        log(
-          __method__,
-          users_turn_to_act?: proxy.users_turn_to_act?,
-          match_ended?: proxy.match_ended?
+      if data['resend']
+        AcpcTableManager.redis.publish(
+          @sending_channel,
+          ProxyUtils.proxy_to_json(proxy)
         )
       else
-        log __method__, users_turn_to_act?: proxy.users_turn_to_act?,
-                        action: action
-
-        if proxy.users_turn_to_act?
-          action = PokerAction.new(action) unless action.is_a?(PokerAction)
-          proxy.play!(action) do |patt|
-            AcpcTableManager.redis.publish(
-              @sending_channel,
-              ProxyUtils.proxy_to_json(patt)
-            )
-          end
+        action = data[AcpcTableManager.config.action_key]
+        if action == AcpcTableManager.config.next_hand_request_code
+          proxy.next_hand!
 
           log(
             __method__,
             users_turn_to_act?: proxy.users_turn_to_act?,
             match_ended?: proxy.match_ended?
           )
+        else
+          log __method__, users_turn_to_act?: proxy.users_turn_to_act?,
+                          action: action
+
+          if proxy.users_turn_to_act?
+            action = PokerAction.new(action) unless action.is_a?(PokerAction)
+            proxy.play!(action) do |patt|
+              AcpcTableManager.redis.publish(
+                @sending_channel,
+                ProxyUtils.proxy_to_json(patt)
+              )
+            end
+
+            log(
+              __method__,
+              users_turn_to_act?: proxy.users_turn_to_act?,
+              match_ended?: proxy.match_ended?
+            )
+          end
         end
       end
       last_message_received = Time.now
