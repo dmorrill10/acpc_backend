@@ -136,7 +136,7 @@ describe AcpcTableManager do
     end
   end
 
-  describe '::running_matches' do
+  describe '::start_matches_if_allowed, ::enqueued_matches, and ::running_matches together' do
     let(:players) { ['TestingBot', 'TestingBot'] }
     let(:match_name) do
       AcpcTableManager.match_name(
