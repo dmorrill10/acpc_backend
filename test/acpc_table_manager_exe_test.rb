@@ -72,7 +72,7 @@ describe 'exe/acpc_table_manager' do
     redis = AcpcTableManager.new_redis_connection
     redis.publish(
       'table-manager',
-      {'game_def_key' => game, 'players': players, 'random_seed': random_seed}.to_json
+      {'game_def_key' => game, 'players' => players, 'random_seed' => random_seed}.to_json
     )
     sleep 0.5
     running_matches = AcpcTableManager.running_matches(game)

@@ -7,6 +7,43 @@ include AcpcDealer
 
 module AcpcTableManager
   module ProxyUtils
+    class Sender
+      def initialize(id)
+        @channel = "#{id}-from-proxy"
+        @redis = AcpcTableManager.new_redis_connection
+      end
+      def publish(data)
+        @redis.publish @sending_channel, data
+      end
+    end
+
+    class Receiver
+      def initialize(id)
+        @channel = "#{id}-to-proxy"
+        @redis = AcpcTableManager.new_redis_connection
+      end
+      def subscribe_with_timeout
+        begin
+          @redis.subscribe_with_timeout(
+            AcpcTableManager.config.maintenance_interval_s,
+            @channel
+          ) { |on| yield on }
+        rescue Redis::TimeoutError
+        end
+      end
+    end
+
+    class ProxyCommunicator
+      def initialize(id)
+        @sender = Sender.new(id)
+        @receiver = Receiver.new(id)
+      end
+      def publish(data) @sender.publish(data) end
+      def subscribe_with_timeout
+        @receiver.subscribe_with_timeout { |on| yield on }
+      end
+    end
+
     def start_proxy(
       game_info,
       seat,

@@ -63,7 +63,7 @@ must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 
 include AcpcTableManager::ProxyUtils
 
-@communicator = AcpcTableManager::ProxyCommunicator.new(options[:id])
+@communicator = ProxyCommunicator.new(options[:id])
 
 last_message_received = Time.now
 
