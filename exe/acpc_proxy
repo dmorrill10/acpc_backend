@@ -4,6 +4,8 @@ require 'acpc_table_manager'
 require 'json'
 require 'optparse'
 
+include AcpcTableManager::SimpleLogging
+
 ARGV << '-h' if ARGV.empty?
 
 options = {}
@@ -28,7 +30,7 @@ OptionParser.new do |opts|
     options[:port] = c.to_i
   end
   opts.on("-g", "--game GAME DEF KEY", "The game to be played.") do |c|
-    options[:game] = c.to_i
+    options[:game] = c
   end
 end.parse!
 
@@ -48,7 +50,7 @@ AcpcTableManager.load! CONFIG_FILE
 game_info = AcpcTableManager.exhibition_config.games[options[:game]]
 unless game_info
   raise OptionParser::ArgumentError.new(
-    "\"#{options[:game]}\" is not a recognized game. Registered games: #{AcpcTableManager.exhibition_config.games}."
+    "\"#{options[:game]}\" is not a recognized game. Registered games: #{AcpcTableManager.exhibition_config.games.keys}."
   )
 end
 
@@ -57,14 +59,11 @@ Signal.trap("TERM") { exit }
 
 must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 
-require_relative 'simple_logging'
-using AcpcTableManager::SimpleLogging::MessageFormatting
 @logger = AcpcTableManager.new_log File.join('proxies', "#{options[:id]}.log")
 
 include AcpcTableManager::ProxyUtils
 
-@sending_channel = "#{options[:id]}-from-proxy"
-@receiving_channel = "#{options[:id]}-to-proxy"
+@communicator = AcpcTableManager::ProxyCommunicator.new(options[:id])
 
 last_message_received = Time.now
 
@@ -72,53 +71,34 @@ begin
   log __method__, options: options, must_send_ready: must_send_ready
 
   proxy = start_proxy(
-    options[:id],
     game_info,
     options[:seat],
-    port,
+    options[:port],
     must_send_ready
   ) do |patt|
-    AcpcTableManager.redis.publish(
-      @sending_channel,
-      ProxyUtils.proxy_to_json(patt)
+    @communicator.publish(
+      AcpcTableManager::ProxyUtils.proxy_to_json(patt)
     )
   end
 
   loop do
-    AcpcTableManager.redis.subscribe_with_timeout(
-      AcpcTableManager.config.maintenance_interval_s,
-      @receiving_channel
-    ) do |on|
+    @communicator.subscribe_with_timeout do |on|
       on.message do |channel, message|
-      data = JSON.parse message
+        data = JSON.parse message
 
-      log __method__, data: data
+        log __method__, data: data
 
-      if data['resend']
-        AcpcTableManager.redis.publish(
-          @sending_channel,
-          ProxyUtils.proxy_to_json(proxy)
-        )
-      else
-        action = data[AcpcTableManager.config.action_key]
-        if action == AcpcTableManager.config.next_hand_request_code
-          proxy.next_hand!
-
-          log(
-            __method__,
-            users_turn_to_act?: proxy.users_turn_to_act?,
-            match_ended?: proxy.match_ended?
+        if data['resend']
+          @communicator.publish(
+            SENDING_CHANNEL,
+            AcpcTableManager::ProxyUtils.proxy_to_json(proxy)
           )
         else
-          log __method__, users_turn_to_act?: proxy.users_turn_to_act?,
-                          action: action
-
-          if proxy.users_turn_to_act?
-            action = PokerAction.new(action) unless action.is_a?(PokerAction)
-            proxy.play!(action) do |patt|
-              AcpcTableManager.redis.publish(
-                @sending_channel,
-                ProxyUtils.proxy_to_json(patt)
+          action = data[AcpcTableManager.config.action_key]
+          if action == AcpcTableManager.config.next_hand_request_code
+            proxy.next_hand! do |patt|
+              @communicator.publish(
+                AcpcTableManager::ProxyUtils.proxy_to_json(patt)
               )
             end
 
@@ -127,35 +107,53 @@ begin
               users_turn_to_act?: proxy.users_turn_to_act?,
               match_ended?: proxy.match_ended?
             )
+          else
+            log __method__, users_turn_to_act?: proxy.users_turn_to_act?,
+                            action: action
+
+            if proxy.users_turn_to_act?
+              action = PokerAction.new(action) unless action.is_a?(PokerAction)
+              proxy.play!(action) do |patt|
+                @communicator.publish(
+                  AcpcTableManager::ProxyUtils.proxy_to_json(patt)
+                )
+              end
+
+              log(
+                __method__,
+                users_turn_to_act?: proxy.users_turn_to_act?,
+                match_ended?: proxy.match_ended?
+              )
+            end
           end
         end
+        exit if proxy.match_ended?(game_info['num_hands_per_match'])
+        last_message_received = Time.now
       end
-      last_message_received = Time.now
     end
-    exit if proxy.match_ended?(game_info['num_hands_per_match'])
-  end
-  if proxy.match_ended? game_info['num_hands_per_match']
-    exit
-  elsif !proxy.users_turn_to_act?
-    last_message_received = Time.now
-  elsif (
-    AcpcTableManager.config.proxy_timeout_s && (
-      Time.now > (
-        last_message_received + AcpcTableManager.config.proxy_timeout_s
+    if proxy.match_ended? game_info['num_hands_per_match']
+      exit
+    elsif !proxy.users_turn_to_act?
+      last_message_received = Time.now
+    elsif (
+      AcpcTableManager.config.proxy_timeout_s && (
+        Time.now > (
+          last_message_received + AcpcTableManager.config.proxy_timeout_s
+        )
       )
     )
-  )
-    if AcpcTableManager.config.on_proxy_timeout == 'fold'
-      play_check_fold! proxy
-    else
-      exit
+      if AcpcTableManager.config.on_proxy_timeout == 'fold'
+        play_check_fold! proxy
+      else
+        exit
+      end
     end
   end
 rescue => e
   log(
     __method__,
     {
-      match_id: options[:match_id],
+      id: options[:id],
       message: e.message,
       backtrace: e.backtrace
     },

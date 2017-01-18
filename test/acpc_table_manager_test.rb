@@ -124,9 +124,9 @@ describe AcpcTableManager do
     end
   end
 
-  describe '::participant_id' do
+  describe '::player_id' do
     it 'works' do
-      AcpcTableManager.participant_id('my match', 'p1', 2).must_equal 'my_match.p1.2'
+      AcpcTableManager.player_id('my match', 'p1', 2).must_equal 'my_match.p1.2'
     end
   end
 

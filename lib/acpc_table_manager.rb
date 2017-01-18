@@ -6,6 +6,7 @@ require 'redis'
 require 'timeout'
 require 'zaru'
 require 'shellwords'
+require 'yaml'
 
 require_relative 'acpc_table_manager/version'
 require_relative 'acpc_table_manager/config'
@@ -13,6 +14,8 @@ require_relative 'acpc_table_manager/monkey_patches'
 require_relative 'acpc_table_manager/simple_logging'
 require_relative 'acpc_table_manager/utils'
 require_relative 'acpc_table_manager/proxy_utils'
+
+using AcpcTableManager::SimpleLogging::MessageFormatting
 
 module AcpcTableManager
   class UninitializedError < StandardError
@@ -29,6 +32,43 @@ module AcpcTableManager
   end
   class RequiresTooManySpecialPorts < StandardError
     include ContextualExceptions::ContextualError
+  end
+
+  class Sender
+    def initialize(id)
+      @channel = "#{id}-from-proxy"
+      @redis = AcpcTableManager.new_redis_connection
+    end
+    def publish(data)
+      @redis.publish @sending_channel, data
+    end
+  end
+
+  class Receiver
+    def initialize(id)
+      @channel = "#{id}-to-proxy"
+      @redis = AcpcTableManager.new_redis_connection
+    end
+    def subscribe_with_timeout
+      begin
+        @redis.subscribe_with_timeout(
+          AcpcTableManager.config.maintenance_interval_s,
+          @channel
+        ) { |on| yield on }
+      rescue Redis::TimeoutError
+      end
+    end
+  end
+
+  class ProxyCommunicator
+    def initialize(id)
+      @sender = Sender.new(id)
+      @receiver = Receiver.new(id)
+    end
+    def publish(data) @sender.publish(data) end
+    def subscribe_with_timeout
+      @receiver.subscribe_with_timeout { |on| yield on }
+    end
   end
 
   module TimeRefinement
@@ -73,9 +113,6 @@ module AcpcTableManager
 
   @@redis_config_file = nil
   def self.redis_config_file() @@redis_config_file end
-
-  @@redis = nil
-  def self.redis() @@redis end
 
   @@config_file = nil
   def self.config_file() @@config_file end
@@ -127,23 +164,8 @@ module AcpcTableManager
         Logger::Severity::WARN
       )
     end
+    @@redis_config_file = config['redis_config_file'] || 'default'
 
-    if config['redis_config_file']
-      @@redis_config_file = config['redis_config_file']
-      @@redis = if @@redis_config_file == 'default'
-        Redis.new
-      else
-        redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
-        dflt = redis_config[:default].symbolize_keys
-        Redis.new(
-          if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
-            dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
-          else
-            dflt
-          end
-        )
-      end
-    end
     FileUtils.mkdir(opponents_log_dir) unless File.directory?(opponents_log_dir)
 
     @@is_initialized = true
@@ -155,6 +177,22 @@ module AcpcTableManager
       FileUtils.touch q unless File.exist?(q)
       r = running_matches_file(game)
       FileUtils.touch r unless File.exist?(r)
+    end
+  end
+
+  def self.new_redis_connection
+    if @@redis_config_file && @@redis_config_file != 'default'
+      redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
+      dflt = redis_config[:default].symbolize_keys
+      Redis.new(
+        if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
+          dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
+        else
+          dflt
+        end
+      )
+    else
+      Redis.new
     end
   end
 
@@ -285,36 +323,19 @@ module AcpcTableManager
     end
   end
 
-  def self.start_proxy(proxy_id, port)
-    command = "#{File.expand_path('../../exe/acpc_proxy', __FILE__)} -t #{config_file} -m #{proxy_id} -p #{port}"
-    config.log(
-      __method__,
-      msg: "Starting proxy",
-      proxy_id: proxy_id,
-      port: port
-    )
+  def self.start_proxy(game, proxy_id, port, seat)
+    config.log __method__, msg: "Starting proxy"
+
+    args = [
+      "-t #{config_file}",
+      "-i #{proxy_id}",
+      "-p #{port}",
+      "-s #{seat}",
+      "-g #{game}"
+    ]
+    command = "#{File.expand_path('../../exe/acpc_proxy', __FILE__)} #{args.join(' ')}"
     start_process command
   end
-
-  def self.start_players(match_info, game_info, port_numbers)
-    pids = []
-    match_info['players'].each_with_index do |player_name, i|
-      if game_info['opponents'][player_name]
-        pids << start_bot(
-          participant_id(match_info['name'], player_name, i),
-          game_info['opponents'][player_name],
-          port_numbers[i]
-        )
-      else
-        pids << start_proxy(
-          participant_id(match_info['name'], player_name, i),
-          port_numbers[i]
-        )
-      end
-    end
-  end
-
-  # @todo Test all below methods
 
   # @todo This method looks broken
   # def self.bots(game_def_key, player_names, dealer_host)
@@ -389,8 +410,8 @@ module AcpcTableManager
     update_enqueued_matches game, enqueued_matches_
   end
 
-  def self.participant_id(name, player, seat)
-    shell_sanitize("#{name}.#{player}.#{seat}")
+  def self.player_id(match_name, player_name, seat)
+    shell_sanitize("#{match_name}.#{player_name}.#{seat}")
   end
 
   def self.available_special_ports(ports_in_use)
@@ -466,14 +487,16 @@ module AcpcTableManager
           pid: (
             if exhibition_config.games[game]['opponents'][player_name]
               start_bot(
-                participant_id(name, player_name, i),
+                player_id(name, player_name, i),
                 exhibition_config.games[game]['opponents'][player_name],
                 port_numbers[i]
               )
             else
               start_proxy(
-                participant_id(name, player_name, i),
-                port_numbers[i]
+                game,
+                player_id(name, player_name, i),
+                port_numbers[i],
+                i
               )
             end
           )

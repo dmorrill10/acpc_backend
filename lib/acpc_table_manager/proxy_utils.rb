@@ -1,12 +1,22 @@
-#!/usr/bin/env ruby
+require 'acpc_poker_types'
+include AcpcPokerTypes
+require 'acpc_poker_player_proxy'
+include AcpcPokerPlayerProxy
+require 'acpc_dealer'
+include AcpcDealer
 
 module AcpcTableManager
   module ProxyUtils
-    def start_proxy(game_info, seat, port, must_send_ready = false)
+    def start_proxy(
+      game_info,
+      seat,
+      port,
+      must_send_ready = false
+    )
       game_definition = GameDefinition.parse_file(game_info['file'])
 
-      AcpcPokerPlayerProxy::PlayerProxy.new(
-        AcpcDealer::ConnectionInformation.new(
+      PlayerProxy.new(
+        ConnectionInformation.new(
           port,
           AcpcTableManager.config.dealer_host
         ),
@@ -15,7 +25,7 @@ module AcpcTableManager
         must_send_ready
       ) do |patt|
         if patt.match_state
-          AcpcTableManager.redis.publish @sending_channel, to_json(patt)
+          @communicator.publish to_json(patt)
         else
           log __method__, before_first_match_state: true
         end
@@ -35,7 +45,7 @@ module AcpcTableManager
           AcpcPokerTypes::PokerAction::CALL
         end
         proxy.play!(action) do |patt|
-          AcpcTableManager.redis.publish @sending_channel, to_json(patt)
+          @communicator.publish to_json(patt)
         end
       end
     end
@@ -71,6 +81,7 @@ module AcpcTableManager
     end
 
     def self.proxy_to_json(proxy)
+      return {}.to_json
       data = {
         hand_has_ended: proxy.hand_ended?,
         match_has_ended: proxy.match_ended?,

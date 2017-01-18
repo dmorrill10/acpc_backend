@@ -20,34 +20,30 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # To send emails
-  spec.add_dependency "pony"
+  spec.add_dependency "pony", '~> 1.11'
 
   # For message passing
-  spec.add_dependency 'redis', '~> 3.2'
+  spec.add_dependency 'redis', '~> 3.3'
 
   # For poker logic
-  spec.add_dependency "acpc_poker_types"
+  spec.add_dependency "acpc_poker_types", '~> 7.6'
   spec.add_dependency 'acpc_dealer', '~> 3.1'
   spec.add_dependency 'acpc_poker_player_proxy', '~> 1.6'
 
   # Simple exception email notifications
-  spec.add_dependency 'rusen'
+  spec.add_dependency 'rusen', '~> 0.1'
 
   # For better errors
-  spec.add_dependency 'contextual_exceptions'
+  spec.add_dependency 'contextual_exceptions', '~> 0.0'
 
   # For better logging
-  spec.add_dependency 'awesome_print'
+  spec.add_dependency 'awesome_print', '~> 1.7'
 
   # For sanitizing file names
-  spec.add_dependency 'zaru'
-
-  # For sanitizing file names in the match slice action log
-  spec.add_dependency 'hescape'
+  spec.add_dependency 'zaru', '~> 0.1'
 
   spec.add_development_dependency "bundler", "~> 1.10"
   spec.add_development_dependency "rake", "~> 10.0"
-  spec.add_development_dependency "minitest"
-  spec.add_development_dependency "mocha"
-  spec.add_development_dependency "pry"
+  spec.add_development_dependency "minitest", '~> 5.10'
+  spec.add_development_dependency "pry", '~> 0.10'
 end

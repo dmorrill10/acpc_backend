@@ -1,5 +1,6 @@
 require 'support/spec_helper'
 require 'acpc_table_manager'
+require 'json'
 
 PWD = File.dirname(__FILE__)
 CONFIG_DATA = {
@@ -14,6 +15,7 @@ CONFIG_DATA = {
 
 def my_setup
   tmp_dir = File.join(PWD, 'exe_test_tmp')
+  FileUtils.rm_rf tmp_dir if File.directory?(tmp_dir)
   FileUtils.mkdir_p tmp_dir
   config_file = File.join(tmp_dir, 'config.yml')
   File.open(config_file, 'w') do |f|
@@ -65,30 +67,68 @@ describe 'exe/acpc_table_manager' do
   end
 
   it 'works' do
-    players = ['TestingBot', 'Proxy']
-    redis = Redis.new
+    proxy_name = 'Proxy'
+    players = ['TestingBot', proxy_name]
+    redis = AcpcTableManager.new_redis_connection
     redis.publish(
       'table-manager',
-      {'game_def_key' => game, 'players': players, 'random_seed': random_seed}
+      {'game_def_key' => game, 'players': players, 'random_seed': random_seed}.to_json
     )
-    sleep 2
+    sleep 0.5
     running_matches = AcpcTableManager.running_matches(game)
     running_matches.length.must_equal 1
     match = running_matches.first
+    name = match[:name]
+
+    log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.log")
+    File.exist?(log_file).must_equal true
+    actions_log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.actions.log")
+    File.exist?(actions_log_file).must_equal true
 
     AcpcDealer.process_exists?(match[:dealer][:pid]).must_equal true
     match[:name].must_match(/^#{match_name(players)}/)
     match[:dealer][:port_numbers].length.must_equal players.length
     match[:dealer][:log_directory].must_equal AcpcTableManager.config.match_log_directory
     match[:players].length.must_equal players.length
+
     match[:players].each_with_index do |player, i|
       player[:name].must_equal players[i]
       player[:pid].must_be :>, 0
       AcpcDealer.process_exists?(player[:pid]).must_equal true
-      # todo
-      AcpcDealer.kill_process player[:pid]
+    end
+
+    to_channel = "#{AcpcTableManager.player_id(name, proxy_name, 1)}-to-proxy"
+
+    proxy_pid = match[:players][1][:pid]
+    loop do
+      redis.publish to_channel, {AcpcTableManager.config.action_key => 'c'}.to_json
+      sleep 0.001
+      break unless AcpcDealer.process_exists?(proxy_pid)
+      redis.publish to_channel, {AcpcTableManager.config.action_key => 'r1'}.to_json
+      sleep 0.001
+      break unless AcpcDealer.process_exists?(proxy_pid)
+      redis.publish to_channel, {AcpcTableManager.config.action_key => 'f'}.to_json
+      sleep 0.001
+      break unless AcpcDealer.process_exists?(proxy_pid)
+    end
+    sleep 0.001
+
+    match[:players].each_with_index do |player, i|
+      AcpcDealer.process_exists?(player[:pid]).must_equal false
+      if AcpcDealer.process_exists?(player[:pid])
+        AcpcDealer.kill_process player[:pid]
+        Timeout.timeout(3) do
+          while AcpcDealer.process_exists?(player[:pid])
+            sleep 0.1
+          end
+        end
+      end
+    end
+    AcpcDealer.process_exists?(match[:dealer][:pid]).must_equal false
+    if AcpcDealer.process_exists?(match[:dealer][:pid])
+      AcpcDealer.kill_process match[:dealer][:pid]
       Timeout.timeout(3) do
-        while AcpcDealer.process_exists?(player[:pid])
+        while AcpcDealer.process_exists?(match[:dealer][:pid])
           sleep 0.1
         end
       end
