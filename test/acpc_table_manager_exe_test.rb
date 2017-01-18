@@ -21,10 +21,12 @@ def my_setup
   File.open(config_file, 'w') do |f|
     f.puts YAML.dump(CONFIG_DATA)
   end
-  redis_pid = if AcpcTableManager.new_redis_connection.connected?
-    nil
-  else
+  redis_pid = begin
+    AcpcTableManager.new_redis_connection.ping
+  rescue Redis::CannotConnectError
     Process.spawn('redis-server')
+  else
+    nil
   end
   patient_pid = Process.spawn(
     "#{File.join(PWD, '..', 'exe', 'acpc_table_manager')} -t #{config_file}"
@@ -38,9 +40,9 @@ def my_teardown(tmp_dir, config_file, redis_pid, patient_pid)
   AcpcDealer.kill_process(redis_pid) if redis_pid
   AcpcDealer.kill_process(patient_pid)
   FileUtils.rm_rf tmp_dir
-  Timeout.timeout(10) do
+  Timeout.timeout(3) do
     while (
-      AcpcDealer.process_exists?(redis_pid) ||
+      (redis_pid && AcpcDealer.process_exists?(redis_pid)) ||
       AcpcDealer.process_exists?(patient_pid)
     )
       sleep 0.1
@@ -58,7 +60,7 @@ describe 'exe/acpc_table_manager' do
     AcpcTableManager.unload!
     File.exist?(config_file).must_equal true
     AcpcTableManager.load! config_file
-    AcpcDealer.process_exists?(redis_pid).must_equal true
+    AcpcDealer.process_exists?(redis_pid).must_equal(true) if redis_pid
     AcpcDealer.process_exists?(patient_pid).must_equal true
   end
 
