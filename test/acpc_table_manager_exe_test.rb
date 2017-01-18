@@ -24,6 +24,7 @@ def my_setup
   redis_pid = begin
     AcpcTableManager.new_redis_connection.ping
   rescue Redis::CannotConnectError
+    STDERR.puts "WARNING: Default redis server had to be started before the test."
     Process.spawn('redis-server')
   else
     nil
@@ -46,6 +47,14 @@ def my_teardown(tmp_dir, config_file, redis_pid, patient_pid)
       AcpcDealer.process_exists?(patient_pid)
     )
       sleep 0.1
+    end
+  end
+  if AcpcDealer.process_exists?(patient_pid)
+    AcpcDealer.force_kill_process(patient_pid)
+    Timeout.timeout(3) do
+      while AcpcDealer.process_exists?(patient_pid)
+        sleep 0.1
+      end
     end
   end
   Process.wait
