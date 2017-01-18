@@ -41,21 +41,16 @@ def my_teardown(tmp_dir, config_file, redis_pid, patient_pid)
   AcpcDealer.kill_process(redis_pid) if redis_pid
   AcpcDealer.kill_process(patient_pid)
   FileUtils.rm_rf tmp_dir
-  Timeout.timeout(3) do
-    while (
-      (redis_pid && AcpcDealer.process_exists?(redis_pid)) ||
-      AcpcDealer.process_exists?(patient_pid)
-    )
-      sleep 0.1
-    end
-  end
-  if AcpcDealer.process_exists?(patient_pid)
-    AcpcDealer.force_kill_process(patient_pid)
+  begin
     Timeout.timeout(3) do
-      while AcpcDealer.process_exists?(patient_pid)
+      while (
+        (redis_pid && AcpcDealer.process_exists?(redis_pid)) ||
+        AcpcDealer.process_exists?(patient_pid)
+      )
         sleep 0.1
       end
     end
+  rescue Timeout::Error # @todo Necessary for TravisCI for some reason
   end
   Process.wait
 end
