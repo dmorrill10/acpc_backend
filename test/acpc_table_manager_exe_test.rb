@@ -34,7 +34,7 @@ def my_teardown(tmp_dir, config_file, redis_pid, patient_pid)
   AcpcDealer.kill_process(redis_pid)
   AcpcDealer.kill_process(patient_pid)
   FileUtils.rm_rf tmp_dir
-  Timeout.timeout(3) do
+  Timeout.timeout(10) do
     while (
       AcpcDealer.process_exists?(redis_pid) ||
       AcpcDealer.process_exists?(patient_pid)
