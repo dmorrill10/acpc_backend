@@ -7,21 +7,21 @@ include AcpcDealer
 
 module AcpcTableManager
   module ProxyUtils
-    class Sender
+    class CommunicatorComponent
+      attr_reader :channel
       def initialize(id)
-        @channel = "#{id}-from-proxy"
+        @channel = self.class.channel_from_id(id)
         @redis = AcpcTableManager.new_redis_connection
-      end
-      def publish(data)
-        @redis.publish @sending_channel, data
       end
     end
+    class Sender < CommunicatorComponent
+      def self.channel_from_id(id) "#{id}-from-proxy" end
+      # @todo Save the data to a queue as well in case subscribers are late, like spectators
+      def publish(data) @redis.publish @channel, data end
+    end
 
-    class Receiver
-      def initialize(id)
-        @channel = "#{id}-to-proxy"
-        @redis = AcpcTableManager.new_redis_connection
-      end
+    class Receiver < CommunicatorComponent
+      def self.channel_from_id(id) "#{id}-to-proxy" end
       def subscribe_with_timeout
         begin
           @redis.subscribe_with_timeout(
@@ -42,6 +42,8 @@ module AcpcTableManager
       def subscribe_with_timeout
         @receiver.subscribe_with_timeout { |on| yield on }
       end
+      def send_channel() @sender.channel end
+      def receive_channel() @receiver.channel end
     end
 
     def start_proxy(
@@ -62,7 +64,7 @@ module AcpcTableManager
         must_send_ready
       ) do |patt|
         if patt.match_state
-          @communicator.publish to_json(patt)
+          @communicator.publish ProxyUtils.proxy_to_json(patt)
         else
           log __method__, before_first_match_state: true
         end
@@ -118,7 +120,6 @@ module AcpcTableManager
     end
 
     def self.proxy_to_json(proxy)
-      return {}.to_json
       data = {
         hand_has_ended: proxy.hand_ended?,
         match_has_ended: proxy.match_ended?,
@@ -137,6 +138,7 @@ module AcpcTableManager
         amount_to_call: amount_to_call(proxy.match_state, proxy.game_def).to_i,
         messages: []
       }
+      return data.to_json
 
       ms = proxy.match_state
 

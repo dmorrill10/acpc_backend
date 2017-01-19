@@ -126,7 +126,7 @@ describe AcpcTableManager do
 
   describe '::player_id' do
     it 'works' do
-      AcpcTableManager.player_id('my match', 'p1', 2).must_equal 'my_match.p1.2'
+      AcpcTableManager.player_id(game, 'p1', 2).must_equal 'match.p1.two_player_nolimit.10h.2'
     end
   end
 

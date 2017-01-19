@@ -373,8 +373,10 @@ module AcpcTableManager
     update_enqueued_matches game, enqueued_matches_
   end
 
-  def self.player_id(match_name, player_name, seat)
-    shell_sanitize("#{match_name}.#{player_name}.#{seat}")
+  def self.player_id(game, player_name, seat)
+    shell_sanitize(
+      "#{match_name(game_def_key: game, players: [player_name], time: false)}.#{seat}"
+    )
   end
 
   def self.available_special_ports(ports_in_use)
@@ -450,14 +452,14 @@ module AcpcTableManager
           pid: (
             if exhibition_config.games[game]['opponents'][player_name]
               start_bot(
-                player_id(name, player_name, i),
+                player_id(game, player_name, i),
                 exhibition_config.games[game]['opponents'][player_name],
                 port_numbers[i]
               )
             else
               start_proxy(
                 game,
-                player_id(name, player_name, i),
+                player_id(game, player_name, i),
                 port_numbers[i],
                 i
               )

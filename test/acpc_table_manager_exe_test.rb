@@ -40,7 +40,7 @@ tmp_dir, config_file, redis_pid, patient_pid = my_setup
 def my_teardown(tmp_dir, config_file, redis_pid, patient_pid)
   AcpcDealer.kill_process(redis_pid) if redis_pid
   AcpcDealer.kill_process(patient_pid)
-  FileUtils.rm_rf tmp_dir
+  # FileUtils.rm_rf tmp_dir
   begin
     Timeout.timeout(3) do
       while (
@@ -78,17 +78,25 @@ describe 'exe/acpc_table_manager' do
 
   it 'works' do
     proxy_name = 'Proxy'
+    to_channel = "#{AcpcTableManager.player_id(game, proxy_name, 1)}-to-proxy"
+    from_channel = "#{AcpcTableManager.player_id(game, proxy_name, 1)}-from-proxy"
     players = ['TestingBot', proxy_name]
     redis = AcpcTableManager.new_redis_connection
+
     redis.publish(
       'table-manager',
-      {'game_def_key' => game, 'players' => players, 'random_seed' => random_seed}.to_json
+      {
+        'game_def_key' => game,
+        'players' => players,
+        'random_seed' => random_seed
+      }.to_json
     )
     sleep 0.5
     running_matches = AcpcTableManager.running_matches(game)
     running_matches.length.must_equal 1
     match = running_matches.first
     name = match[:name]
+    proxy_pid = match[:players][1][:pid]
 
     log_file = File.join(AcpcTableManager.config.match_log_directory, "#{name}.log")
     File.exist?(log_file).must_equal true
@@ -107,21 +115,45 @@ describe 'exe/acpc_table_manager' do
       AcpcDealer.process_exists?(player[:pid]).must_equal true
     end
 
-    to_channel = "#{AcpcTableManager.player_id(name, proxy_name, 1)}-to-proxy"
-
-    proxy_pid = match[:players][1][:pid]
-    loop do
-      redis.publish to_channel, {AcpcTableManager.config.action_key => 'c'}.to_json
-      sleep 0.001
-      break unless AcpcDealer.process_exists?(proxy_pid)
-      redis.publish to_channel, {AcpcTableManager.config.action_key => 'r1'}.to_json
-      sleep 0.001
-      break unless AcpcDealer.process_exists?(proxy_pid)
-      redis.publish to_channel, {AcpcTableManager.config.action_key => 'f'}.to_json
-      sleep 0.001
-      break unless AcpcDealer.process_exists?(proxy_pid)
+    act = ->(i) do
+      redis.publish(
+        to_channel,
+        {
+          AcpcTableManager.config.action_key => (
+            case i % 3
+            when 0
+              'c'
+            when 1
+              'r1'
+            when 2
+              'f'
+            end
+          )
+        }.to_json
+      )
     end
-    sleep 0.001
+
+    i = 0
+    begin
+      AcpcTableManager.new_redis_connection.subscribe_with_timeout(
+        1,
+        from_channel
+      ) do |on|
+        on.message do |channel, message|
+          data = JSON.parse(message)
+          act.call i
+          i += 1
+          return unless AcpcDealer.process_exists?(proxy_pid)
+        end
+        on.subscribe do |channel, subscriptions|
+          act.call i
+          i += 1
+          return unless AcpcDealer.process_exists?(proxy_pid)
+        end
+      end
+    rescue Redis::TimeoutError
+      AcpcDealer.process_exists?(proxy_pid).must_equal false
+    end
 
     match[:players].each_with_index do |player, i|
       AcpcDealer.process_exists?(player[:pid]).must_equal false

@@ -68,7 +68,13 @@ include AcpcTableManager::ProxyUtils
 last_message_received = Time.now
 
 begin
-  log __method__, options: options, must_send_ready: must_send_ready
+  log(
+    __method__,
+    options: options,
+    send_channel: @communicator.send_channel,
+    receive_channel: @communicator.receive_channel,
+    must_send_ready: must_send_ready
+  )
 
   proxy = start_proxy(
     game_info,
@@ -76,9 +82,7 @@ begin
     options[:port],
     must_send_ready
   ) do |patt|
-    @communicator.publish(
-      AcpcTableManager::ProxyUtils.proxy_to_json(patt)
-    )
+    @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
   end
 
   loop do
@@ -90,16 +94,13 @@ begin
 
         if data['resend']
           @communicator.publish(
-            SENDING_CHANNEL,
             AcpcTableManager::ProxyUtils.proxy_to_json(proxy)
           )
         else
           action = data[AcpcTableManager.config.action_key]
           if action == AcpcTableManager.config.next_hand_request_code
             proxy.next_hand! do |patt|
-              @communicator.publish(
-                AcpcTableManager::ProxyUtils.proxy_to_json(patt)
-              )
+              @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
             end
 
             log(
@@ -114,9 +115,7 @@ begin
             if proxy.users_turn_to_act?
               action = PokerAction.new(action) unless action.is_a?(PokerAction)
               proxy.play!(action) do |patt|
-                @communicator.publish(
-                  AcpcTableManager::ProxyUtils.proxy_to_json(patt)
-                )
+                @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
               end
 
               log(
