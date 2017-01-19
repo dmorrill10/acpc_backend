@@ -54,8 +54,8 @@ unless game_info
   )
 end
 
-Signal.trap("INT") { exit }
-Signal.trap("TERM") { exit }
+Signal.trap("INT") { exit_and_del_saved }
+Signal.trap("TERM") { exit_and_del_saved }
 
 must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 
@@ -126,12 +126,12 @@ begin
             end
           end
         end
-        exit if proxy.match_ended?(game_info['num_hands_per_match'])
+        exit_and_del_saved if proxy.match_ended?(game_info['num_hands_per_match'])
         last_message_received = Time.now
       end
     end
     if proxy.match_ended? game_info['num_hands_per_match']
-      exit
+      exit_and_del_saved
     elsif !proxy.users_turn_to_act?
       last_message_received = Time.now
     elsif (
@@ -144,7 +144,7 @@ begin
       if AcpcTableManager.config.on_proxy_timeout == 'fold'
         play_check_fold! proxy
       else
-        exit
+        exit_and_del_saved
       end
     end
   end
@@ -160,3 +160,4 @@ rescue => e
   )
   AcpcTableManager.notify e # Send an email notification
 end
+exit_and_del_saved

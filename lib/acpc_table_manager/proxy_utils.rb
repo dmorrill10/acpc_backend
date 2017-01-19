@@ -16,8 +16,11 @@ module AcpcTableManager
     end
     class Sender < CommunicatorComponent
       def self.channel_from_id(id) "#{id}-from-proxy" end
-      # @todo Save the data to a queue as well in case subscribers are late, like spectators
-      def publish(data) @redis.publish @channel, data end
+      def publish(data)
+        @redis.rpush "#{@channel}-saved", data
+        @redis.publish @channel, data
+      end
+      def del() @redis.del "#{@channel}-saved" end
     end
 
     class Receiver < CommunicatorComponent
@@ -44,6 +47,12 @@ module AcpcTableManager
       end
       def send_channel() @sender.channel end
       def receive_channel() @receiver.channel end
+      def del_saved() @sender.del end
+    end
+
+    def exit_and_del_saved
+      @communicator.del_saved
+      exit
     end
 
     def start_proxy(

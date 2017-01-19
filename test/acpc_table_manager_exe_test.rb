@@ -134,13 +134,17 @@ describe 'exe/acpc_table_manager' do
     end
 
     i = 0
+    from_proxy = AcpcTableManager.new_redis_connection
     begin
-      AcpcTableManager.new_redis_connection.subscribe_with_timeout(
+      from_proxy.subscribe_with_timeout(
         1,
         from_channel
       ) do |on|
         on.message do |channel, message|
-          data = JSON.parse(message)
+          JSON.parse(message).must_equal(
+            # Note that this will not work if you use from_proxy as the Redis connection
+            redis.lrange("#{from_channel}-saved", -1, -1).map { |m| JSON.parse(m) }.first
+          )
           act.call i
           i += 1
           return unless AcpcDealer.process_exists?(proxy_pid)
@@ -154,6 +158,7 @@ describe 'exe/acpc_table_manager' do
     rescue Redis::TimeoutError
       AcpcDealer.process_exists?(proxy_pid).must_equal false
     end
+    from_proxy.lrange("#{from_channel}-saved", 0, -1).must_equal []
 
     match[:players].each_with_index do |player, i|
       AcpcDealer.process_exists?(player[:pid]).must_equal false
