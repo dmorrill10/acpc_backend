@@ -232,9 +232,11 @@ module AcpcTableManager
     raise_uninitialized unless initialized?
   end
 
-  def self.new_log(log_file_name)
+  def self.new_log(log_file_name, log_directory_ = nil)
     raise_if_uninitialized
-    Logger.from_file_name(File.join(@@config.my_log_directory, log_file_name)).with_metadata!
+    log_directory_ ||= @@config.my_log_directory
+    FileUtils.mkdir_p(log_directory_) unless File.directory?(log_directory_)
+    Logger.from_file_name(File.join(log_directory_, log_file_name)).with_metadata!
   end
 
   def self.unload!

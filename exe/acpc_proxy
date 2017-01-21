@@ -61,7 +61,10 @@ Signal.trap("TERM") { exit_and_del_saved }
 
 must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 
-@logger = AcpcTableManager.new_log File.join('proxies', "#{options[:id]}.log")
+@logger = AcpcTableManager.new_log(
+  "#{options[:id]}.log",
+  File.join(AcpcTableManager.config.log_directory, 'proxies')
+)
 
 include AcpcTableManager::ProxyUtils
 
