@@ -63,7 +63,7 @@ must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
 
 include AcpcTableManager::ProxyUtils
 
-@communicator = ProxyCommunicator.new(options[:id])
+@communicator = AcpcTableManager::ProxyCommunicator.new(options[:id])
 
 last_message_received = Time.now
 
@@ -86,10 +86,8 @@ begin
   end
 
   loop do
-    @communicator.subscribe_with_timeout do |on|
-      on.message do |channel, message|
-        data = JSON.parse message
-
+    begin
+      @communicator.subscribe_with_timeout do |data|
         log __method__, data: data
 
         if data['resend']
@@ -129,22 +127,23 @@ begin
         exit_and_del_saved if proxy.match_ended?(game_info['num_hands_per_match'])
         last_message_received = Time.now
       end
-    end
-    if proxy.match_ended? game_info['num_hands_per_match']
-      exit_and_del_saved
-    elsif !proxy.users_turn_to_act?
-      last_message_received = Time.now
-    elsif (
-      AcpcTableManager.config.proxy_timeout_s && (
-        Time.now > (
-          last_message_received + AcpcTableManager.config.proxy_timeout_s
+    rescue AcpcTableManager::SubscribeTimeout
+      if proxy.match_ended? game_info['num_hands_per_match']
+        exit_and_del_saved
+      elsif !proxy.users_turn_to_act?
+        last_message_received = Time.now
+      elsif (
+        AcpcTableManager.config.proxy_timeout_s && (
+          Time.now > (
+            last_message_received + AcpcTableManager.config.proxy_timeout_s
+          )
         )
       )
-    )
-      if AcpcTableManager.config.on_proxy_timeout == 'fold'
-        play_check_fold! proxy
-      else
-        exit_and_del_saved
+        if AcpcTableManager.config.on_proxy_timeout == 'fold'
+          play_check_fold! proxy
+        else
+          exit_and_del_saved
+        end
       end
     end
   end

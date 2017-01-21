@@ -12,7 +12,6 @@ describe AcpcTableManager do
       'match_log_directory' => '%{pwd}/tmp/log/match_logs',
       'exhibition_constants' => '%{pwd}/support/exhibition.json',
       'log_directory' => '%{pwd}/tmp/log',
-      'bots' => '%{pwd}/support/bots.yml',
       'data_directory' => '%{pwd}/tmp/db'
     }
   }

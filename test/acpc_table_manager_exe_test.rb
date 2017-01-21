@@ -8,7 +8,6 @@ CONFIG_DATA = {
   'match_log_directory' => '%{pwd}/log/match_logs',
   'exhibition_constants' => '%{pwd}/../support/exhibition.json',
   'log_directory' => '%{pwd}/log',
-  'bots' => '%{pwd}/../support/bots.yml',
   'data_directory' => '%{pwd}/db',
   'redis_config_file' => 'default'
 }
@@ -83,7 +82,7 @@ describe 'exe/acpc_table_manager' do
     players = ['TestingBot', proxy_name]
     redis = AcpcTableManager.new_redis_connection
 
-    redis.publish(
+    redis.rpush(
       'table-manager',
       {
         'game_def_key' => game,
@@ -116,7 +115,7 @@ describe 'exe/acpc_table_manager' do
     end
 
     act = ->(i) do
-      redis.publish(
+      redis.rpush(
         to_channel,
         {
           AcpcTableManager.config.action_key => (
@@ -135,30 +134,11 @@ describe 'exe/acpc_table_manager' do
 
     i = 0
     from_proxy = AcpcTableManager.new_redis_connection
-    begin
-      from_proxy.subscribe_with_timeout(
-        1,
-        from_channel
-      ) do |on|
-        on.message do |channel, message|
-          JSON.parse(message).must_equal(
-            # Note that this will not work if you use from_proxy as the Redis connection
-            redis.lrange("#{from_channel}-saved", -1, -1).map { |m| JSON.parse(m) }.first
-          )
-          act.call i
-          i += 1
-          return unless AcpcDealer.process_exists?(proxy_pid)
-        end
-        on.subscribe do |channel, subscriptions|
-          act.call i
-          i += 1
-          return unless AcpcDealer.process_exists?(proxy_pid)
-        end
-      end
-    rescue Redis::TimeoutError
-      AcpcDealer.process_exists?(proxy_pid).must_equal false
+    while AcpcDealer.process_exists?(proxy_pid) do
+      list, message = from_proxy.blpop(from_channel, 1)
+      act.call i
+      i += 1
     end
-    from_proxy.lrange("#{from_channel}-saved", 0, -1).must_equal []
 
     match[:players].each_with_index do |player, i|
       AcpcDealer.process_exists?(player[:pid]).must_equal false

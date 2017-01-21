@@ -34,30 +34,24 @@ AcpcTableManager.load! CONFIG_FILE
 Signal.trap('INT') { exit }
 Signal.trap('TERM') { exit }
 
-redis = AcpcTableManager.new_redis_connection
+communicator = AcpcTableManager::TableManagerReceiver.new('table-manager')
 
 loop do
   begin
-    redis.subscribe_with_timeout(
-      AcpcTableManager.config.maintenance_interval_s,
-      'table-manager'
-    ) do |on|
-      on.message do |channel, message|
-        match_info = JSON.parse message
-        AcpcTableManager.config.log(__method__, match_info: match_info)
+    communicator.subscribe_with_timeout do |match_info|
+      AcpcTableManager.config.log(__method__, match_info: match_info)
 
-        raise "No match information provided in message, \"#{message}\" sent on channel, \"#{channel}\"." unless match_info
+      raise "No match information provided in message, \"#{message}\" sent on channel, \"#{channel}\"." unless match_info
 
-        AcpcTableManager.enqueue_match(
-          match_info['game_def_key'],
-          match_info['players'],
-          match_info['random_seed']
-        )
-        AcpcTableManager.start_matches_if_allowed
-      end
+      AcpcTableManager.enqueue_match(
+        match_info['game_def_key'],
+        match_info['players'],
+        match_info['random_seed']
+      )
+      AcpcTableManager.start_matches_if_allowed
     end
+  rescue AcpcTableManager::SubscribeTimeout
     AcpcTableManager.start_matches_if_allowed
-  rescue Redis::TimeoutError
   rescue => e
     AcpcTableManager.config.log(
       __method__,

@@ -33,6 +33,62 @@ module AcpcTableManager
   class RequiresTooManySpecialPorts < StandardError
     include ContextualExceptions::ContextualError
   end
+  class SubscribeTimeout < StandardError
+    include ContextualExceptions::ContextualError
+  end
+
+  class CommunicatorComponent
+    attr_reader :channel
+    def initialize(id)
+      @channel = self.class.channel_from_id(id)
+      @redis = AcpcTableManager.new_redis_connection()
+    end
+  end
+
+  class Receiver < CommunicatorComponent
+    def subscribe_with_timeout
+      list, message = @redis.blpop(
+        @channel,
+        timeout: AcpcTableManager.config.maintenance_interval_s
+      )
+      if message
+        yield JSON.parse(message)
+      else
+        raise SubscribeTimeout
+      end
+    end
+  end
+
+  class TableManagerReceiver < Receiver
+    def self.channel_from_id(id) id end
+  end
+
+  class Sender < CommunicatorComponent
+    def self.channel_from_id(id) "#{id}-from-proxy" end
+    def publish(data)
+      @redis.rpush @channel, data
+      @redis.publish @channel, data
+    end
+    def del() @redis.del @channel end
+  end
+
+  class ProxyReceiver < Receiver
+    def self.channel_from_id(id) "#{id}-to-proxy" end
+  end
+
+  class ProxyCommunicator
+    def initialize(id)
+      @sender = Sender.new(id)
+      @receiver = ProxyReceiver.new(id)
+    end
+    def publish(data) @sender.publish(data) end
+    def subscribe_with_timeout
+      @receiver.subscribe_with_timeout { |on| yield on }
+    end
+    def send_channel() @sender.channel end
+    def receive_channel() @receiver.channel end
+    def del_saved() @sender.del end
+  end
 
   module TimeRefinement
     refine Time.class() do
@@ -143,19 +199,19 @@ module AcpcTableManager
     end
   end
 
-  def self.new_redis_connection
+  def self.new_redis_connection(options = {})
     if @@redis_config_file && @@redis_config_file != 'default'
       redis_config = YAML.load_file(@@redis_config_file).symbolize_keys
-      dflt = redis_config[:default].symbolize_keys
+      options.merge!(redis_config[:default].symbolize_keys)
       Redis.new(
         if config['redis_environment_mode'] && redis_config[config['redis_environment_mode'].to_sym]
-          dflt.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
+          options.merge(redis_config[config['redis_environment_mode'].to_sym].symbolize_keys)
         else
-          dflt
+          options
         end
       )
     else
-      Redis.new
+      Redis.new options
     end
   end
 

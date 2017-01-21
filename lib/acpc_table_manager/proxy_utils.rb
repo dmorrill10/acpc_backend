@@ -7,49 +7,6 @@ include AcpcDealer
 
 module AcpcTableManager
   module ProxyUtils
-    class CommunicatorComponent
-      attr_reader :channel
-      def initialize(id)
-        @channel = self.class.channel_from_id(id)
-        @redis = AcpcTableManager.new_redis_connection
-      end
-    end
-    class Sender < CommunicatorComponent
-      def self.channel_from_id(id) "#{id}-from-proxy" end
-      def publish(data)
-        @redis.rpush "#{@channel}-saved", data
-        @redis.publish @channel, data
-      end
-      def del() @redis.del "#{@channel}-saved" end
-    end
-
-    class Receiver < CommunicatorComponent
-      def self.channel_from_id(id) "#{id}-to-proxy" end
-      def subscribe_with_timeout
-        begin
-          @redis.subscribe_with_timeout(
-            AcpcTableManager.config.maintenance_interval_s,
-            @channel
-          ) { |on| yield on }
-        rescue Redis::TimeoutError
-        end
-      end
-    end
-
-    class ProxyCommunicator
-      def initialize(id)
-        @sender = Sender.new(id)
-        @receiver = Receiver.new(id)
-      end
-      def publish(data) @sender.publish(data) end
-      def subscribe_with_timeout
-        @receiver.subscribe_with_timeout { |on| yield on }
-      end
-      def send_channel() @sender.channel end
-      def receive_channel() @receiver.channel end
-      def del_saved() @sender.del end
-    end
-
     def exit_and_del_saved
       @communicator.del_saved
       exit
