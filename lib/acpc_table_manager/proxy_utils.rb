@@ -30,9 +30,10 @@ module AcpcTableManager
         must_send_ready
       ) do |patt|
         if patt.match_state
+          log __method__, msg: 'Sending match state'
           @communicator.publish ProxyUtils.proxy_to_json(patt)
         else
-          log __method__, before_first_match_state: true
+          log __method__, msg: 'Before first match state'
         end
       end
     end
@@ -50,6 +51,7 @@ module AcpcTableManager
           AcpcPokerTypes::PokerAction::CALL
         end
         proxy.play!(action) do |patt|
+          log __method__, msg: 'Sending match state'
           @communicator.publish to_json(patt)
         end
       end

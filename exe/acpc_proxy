@@ -100,6 +100,7 @@ begin
         log __method__, data: data
 
         if data['resend']
+          log __method__, msg: 'Resending match state'
           @communicator.publish(
             AcpcTableManager::ProxyUtils.proxy_to_json(proxy)
           )
@@ -107,28 +108,30 @@ begin
           action = data[AcpcTableManager.config.action_key]
           if action == AcpcTableManager.config.next_hand_request_code
             proxy.next_hand! do |patt|
+              log 'next_hand! block', msg: 'Sending match state'
               @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
             end
 
             log(
-              __method__,
+              'after next_hand!',
               users_turn_to_act?: proxy.users_turn_to_act?,
-              match_ended?: proxy.match_ended?
+              match_ended?: proxy.match_ended?(game_info['num_hands_per_match'])
             )
           else
-            log __method__, users_turn_to_act?: proxy.users_turn_to_act?,
-                            action: action
+            log 'before acting', users_turn_to_act?: proxy.users_turn_to_act?,
+                                 action: action
 
             if proxy.users_turn_to_act?
               action = PokerAction.new(action) unless action.is_a?(PokerAction)
               proxy.play!(action) do |patt|
+                log 'play! block', msg: 'Sending match state'
                 @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
               end
 
               log(
-                __method__,
+                'after play!',
                 users_turn_to_act?: proxy.users_turn_to_act?,
-                match_ended?: proxy.match_ended?
+                match_ended?: proxy.match_ended?(game_info['num_hands_per_match'])
               )
             end
           end
