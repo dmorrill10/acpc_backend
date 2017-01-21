@@ -103,9 +103,8 @@ describe AcpcTableManager do
           "--t_response 0",
           "--t_hand 0",
           "--t_per_hand 0",
-          "--t_ready 0",
           "-a"
-        ]
+        ].join(' ')
       )
     end
   end

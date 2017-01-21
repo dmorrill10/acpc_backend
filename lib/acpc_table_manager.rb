@@ -309,7 +309,7 @@ module AcpcTableManager
       ),
       random_seed: Shellwords.escape(random_seed.to_s),
       player_names: sanitized_player_names(players).join(' '),
-      options: exhibition_config.dealer_options
+      options: exhibition_config.dealer_options.join(' ')
     }
   end
 
@@ -318,12 +318,8 @@ module AcpcTableManager
   end
 
   def self.start_dealer(game, name, players, random_seed, port_numbers)
-    config.log(
-      __method__,
-      msg: "Starting dealer for match \"#{name}\"."
-    )
-
-    args = dealer_arguments(game, name, players, random_seed)
+    config.log __method__, name: name
+    args = dealer_arguments game, name, players, random_seed
 
     config.log __method__, {
       dealer_arguments: args,

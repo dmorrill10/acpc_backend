@@ -1,14 +1,4 @@
-# name/game/hands/seed match.TestingBot.TestingBot.two_player_nolimit.10h /Users/morrill/.rbenv/versions/2.3.0/lib/ruby/gems/2.3.0/gems/acpc_dealer-3.0.1/vendor/project_acpc_server/holdem.nolimit.2p.reverse_blinds.game 10 9001
-#--t_response 600000
-#--t_hand 600000
-#--t_per_hand 7000
-STATE:0:cc/r200c/cr300c/cr400c:2dKc|4s6s/9cKs4h/2s/9h:400|-400:TestingBot|TestingBot
-STATE:1:r200c/cr300c/cr400c/cr500c:Td9d|6dKc/2sQs3s/Tc/6h:500|-500:TestingBot|TestingBot
-STATE:2:r200c/cr300c/cr400c/cr500c:7s9s|8s2h/5dJh2s/8h/Ks:-500|500:TestingBot|TestingBot
-STATE:3:r200c/cr300c/cr400c/cr500c:Qd9d|Ad5s/5h9cTd/Ah/8s:-500|500:TestingBot|TestingBot
-STATE:4:r200c/cr300c/cr400c/cr500c:5d8c|Jc4c/3c5sJd/Td/5h:500|-500:TestingBot|TestingBot
-STATE:5:r200c/cr300c/cr400c/cr500c:5dTd|Kc4h/Qd2c3d/7s/6c:-500|500:TestingBot|TestingBot
-STATE:6:r200c/cr300c/cr400c/cr500c:5s7h|Kh8c/9cJdTd/9h/9s:-500|500:TestingBot|TestingBot
-STATE:7:r200c/cr300c/cr400c/cr500c:2hKs|Ad7d/3h8c4d/5s/Th:-500|500:TestingBot|TestingBot
-STATE:8:r200c/cr300c/cr400c/cr500c:2dAs|9cTh/6dKsTs/3c/2s:-500|500:TestingBot|TestingBot
-STATE:9:r200c/cr300c/cr400c/cr500c:Qc2h|Jh3d/TsAh6d/9h/7h:500|-500:TestingBot|TestingBot
+# name/game/hands/seed match.TestingBot.TestingBot.two_player_nolimit.10h /Users/morrill/.rbenv/versions/2.3.0/lib/ruby/gems/2.3.0/gems/acpc_dealer-3.1.0/vendor/project_acpc_server/holdem.nolimit.2p.reverse_blinds.game 10 9001
+#--t_response 0
+#--t_hand 0
+#--t_per_hand 0
