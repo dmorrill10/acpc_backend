@@ -11,6 +11,8 @@ ARGV << '-h' if ARGV.empty?
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: #{$0} [options]"
+  
+  opts.version = AcpcTableManager::VERSION
 
   opts.on_tail("-h", "--help", "Show this message") do
     puts opts
