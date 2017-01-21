@@ -52,6 +52,17 @@ loop do
     end
   rescue AcpcTableManager::SubscribeTimeout
     AcpcTableManager.start_matches_if_allowed
+  rescue Redis::ConnectionError => e
+    AcpcTableManager.config.log(
+      __method__,
+      {
+        message: "#{e.message}. Exiting now.",
+        backtrace: e.backtrace
+      },
+      Logger::Severity::ERROR
+    )
+    AcpcTableManager.notify e
+    exit
   rescue => e
     AcpcTableManager.config.log(
       __method__,

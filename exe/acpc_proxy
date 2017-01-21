@@ -82,8 +82,11 @@ begin
     options[:port],
     must_send_ready
   ) do |patt|
+    log 'start_proxy_block' 
     @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
   end
+  
+  log 'starting event loop'
 
   loop do
     begin

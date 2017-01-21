@@ -75,13 +75,16 @@ describe 'exe/acpc_table_manager' do
     )
   end
 
-  it 'works' do
-    proxy_name = 'Proxy'
-    to_channel = "#{AcpcTableManager.player_id(game, proxy_name, 1)}-to-proxy"
-    from_channel = "#{AcpcTableManager.player_id(game, proxy_name, 1)}-from-proxy"
-    players = ['TestingBot', proxy_name]
-    redis = AcpcTableManager.new_redis_connection
-
+  let(:proxy_name) { 'Proxy' }
+  let(:to_channel) do
+    "#{AcpcTableManager.player_id(game, proxy_name, seat)}-to-proxy"
+  end
+  let(:from_channel) do
+    "#{AcpcTableManager.player_id(game, proxy_name, seat)}-from-proxy"
+  end
+  let(:seat) { players.index(proxy_name) }
+  let(:redis) { AcpcTableManager.new_redis_connection }
+  def start_match
     redis.rpush(
       'table-manager',
       {
@@ -91,6 +94,9 @@ describe 'exe/acpc_table_manager' do
       }.to_json
     )
     sleep 0.5
+  end
+  def play_match
+    start_match
     running_matches = AcpcTableManager.running_matches(game)
     running_matches.length.must_equal 1
     match = running_matches.first
@@ -136,6 +142,7 @@ describe 'exe/acpc_table_manager' do
     from_proxy = AcpcTableManager.new_redis_connection
     while AcpcDealer.process_exists?(proxy_pid) do
       list, message = from_proxy.blpop(from_channel, 1)
+      # ap JSON.parse(message) if message
       act.call i
       i += 1
     end
@@ -159,6 +166,19 @@ describe 'exe/acpc_table_manager' do
           sleep 0.1
         end
       end
+    end
+  end
+
+  describe 'in seat 2' do
+    let(:players) { ['TestingBot', proxy_name] }
+    it 'works' do
+      play_match
+    end
+  end
+  describe 'in seat 1' do
+    let(:players) { [proxy_name, 'TestingBot'] }
+    it 'works' do
+      play_match
     end
   end
 end
