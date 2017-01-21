@@ -3,17 +3,24 @@
 require 'acpc_poker_types'
 require 'acpc_poker_basic_proxy'
 require 'acpc_dealer'
+require 'awesome_print'
 
 class AcpcTestingBot
   def initialize(port_number, server_host_name='localhost', random=false)
+    log(
+      __method__, 
+      port_number: port_number, 
+      server_host_name: server_host_name,
+      random: random
+    )
     dealer_info = AcpcDealer::ConnectionInformation.new port_number, server_host_name
     @proxy_bot = AcpcPokerBasicProxy::BasicProxy.new dealer_info
 
-    log __method__, 'Connected to dealer'
+    log __method__, msg: 'Connected to dealer'
 
     match_state = @proxy_bot.receive_match_state!
 
-    log __method__, 'Got first match state'
+    log __method__, msg: 'Got first match state'
 
     @counter = 0
     while true do
@@ -25,7 +32,7 @@ class AcpcTestingBot
         end
         match_state = @proxy_bot.receive_match_state!
 
-        log __method__, "match_state: #{match_state}"
+        log __method__, match_state: match_state
 
         if match_state.last_action && match_state.last_action.action == 'r'
           @fold_allowed = true
@@ -46,8 +53,7 @@ class AcpcTestingBot
   end
 
   def send_deterministic_action
-
-    log __method__, "counter: #{@counter}"
+    log __method__, counter: @counter
 
     case (@counter % 3)
     when 0
@@ -68,13 +74,13 @@ class AcpcTestingBot
     random_number = rand
     @counter = (random_number * 10 ** (random_number.to_s.length-2)).to_i
 
-    log __method__, "counter: #{@counter}"
+    log __method__, counter: @counter
 
     send_deterministic_action
   end
 
-  def log(method, message)
-    puts "#{self.class}: #{method}: #{message}"
+  def log(method, data)
+    ap({"#{self.class}##{method}" => data})
     STDOUT.flush
   end
 end
