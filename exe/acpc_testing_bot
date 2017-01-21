@@ -108,10 +108,8 @@ def run_script
    AcpcTestingBot.new port, server_host_name, random
 end
 
-if $0 == __FILE__
-  if proper_usage?
-    run_script
-  else
-    print_usage
-  end
+if proper_usage?
+  run_script
+else
+  print_usage
 end
