@@ -31,7 +31,7 @@ module AcpcTableManager
       ) do |patt|
         if patt.match_state
           log __method__, msg: 'Sending match state'
-          @communicator.publish ProxyUtils.proxy_to_json(patt)
+          @communicator.publish ProxyUtils.proxy_to_json(patt, game_info)
         else
           log __method__, msg: 'Before first match state'
         end
@@ -87,10 +87,10 @@ module AcpcTableManager
       ].min.floor
     end
 
-    def self.proxy_to_json(proxy)
+    def self.proxy_to_json(proxy, game_info)
       data = {
         hand_has_ended: proxy.hand_ended?,
-        match_has_ended: proxy.match_ended?,
+        match_has_ended: proxy.match_ended?(game_info['num_hands_per_match']),
         seat_with_dealer_button: proxy.dealer_player.seat.to_i,
         seat_next_to_act: if proxy.next_player_to_act
           proxy.next_player_to_act.seat.to_i

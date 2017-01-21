@@ -89,7 +89,7 @@ begin
     must_send_ready
   ) do |patt|
     log 'start_proxy_block' 
-    @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
+    @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
   end
   
   log 'starting event loop'
@@ -102,14 +102,14 @@ begin
         if data['resend']
           log __method__, msg: 'Resending match state'
           @communicator.publish(
-            AcpcTableManager::ProxyUtils.proxy_to_json(proxy)
+            AcpcTableManager::ProxyUtils.proxy_to_json(proxy, game_info)
           )
         else
           action = data[AcpcTableManager.config.action_key]
           if action == AcpcTableManager.config.next_hand_request_code
             proxy.next_hand! do |patt|
               log 'next_hand! block', msg: 'Sending match state'
-              @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
+              @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
             end
 
             log(
@@ -125,7 +125,7 @@ begin
               action = PokerAction.new(action) unless action.is_a?(PokerAction)
               proxy.play!(action) do |patt|
                 log 'play! block', msg: 'Sending match state'
-                @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt)
+                @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
               end
 
               log(

@@ -24,7 +24,7 @@ def my_setup
     AcpcTableManager.new_redis_connection.ping
   rescue Redis::CannotConnectError
     STDERR.puts "WARNING: Default redis server had to be started before the test."
-    Process.spawn('redis-server')
+    Process.spawn('redis-server --save "" --appendonly no')
   else
     nil
   end

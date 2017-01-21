@@ -100,9 +100,9 @@ describe AcpcTableManager do
         random_seed: '9001',
         player_names: 'ExamplePlayer human_player',
         options: [
-          "--t_response 0",
-          "--t_hand 0",
-          "--t_per_hand 0",
+          "--t_response -1",
+          "--t_hand -1",
+          "--t_per_hand -1",
           "-a"
         ].join(' ')
       )

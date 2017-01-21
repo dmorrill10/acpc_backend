@@ -43,9 +43,9 @@
     }
   },
   "dealer_options": [
-    "--t_response 0",
-    "--t_hand 0",
-    "--t_per_hand 0",
+    "--t_response -1",
+    "--t_hand -1",
+    "--t_per_hand -1",
     "-a"
   ],
   "special_ports_to_dealer": [19001]
