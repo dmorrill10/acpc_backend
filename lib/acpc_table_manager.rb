@@ -573,26 +573,7 @@ module AcpcTableManager
 
       begin
         port_numbers = allocate_ports(next_match[:players], game, ports_in_use)
-      rescue NoPortForDealerAvailable => e
-        config.log(
-          __method__,
-          {
-            message: e.message,
-            backtrace: e.backtrace
-          },
-          Logger::Severity::WARN
-        )
-        skipped_matches << next_match
-      rescue RequiresTooManySpecialPorts => e
-        config.log(
-          __method__,
-          {
-            message: e.message,
-            backtrace: e.backtrace
-          },
-          Logger::Severity::ERROR
-        )
-      else
+        
         dealer_info, player_info = start_match(
           game,
           next_match[:name],
@@ -600,7 +581,28 @@ module AcpcTableManager
           next_match[:random_seed],
           port_numbers
         )
-
+      rescue NoPortForDealerAvailable => e
+        config.log(
+          __method__,
+          {
+            message: e.message,
+            skipping_match: next_match[:name],
+            backtrace: e.backtrace
+          },
+          Logger::Severity::WARN
+        )
+        skipped_matches << next_match
+      rescue RequiresTooManySpecialPorts, Timeout::Error => e
+        config.log(
+          __method__,
+          {
+            message: e.message,
+            deleting_match: next_match[:name],
+            backtrace: e.backtrace
+          },
+          Logger::Severity::ERROR
+        )
+      else
         running_matches_.push(
           name: next_match[:name],
           dealer: dealer_info,

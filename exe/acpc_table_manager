@@ -65,7 +65,8 @@ loop do
     AcpcTableManager.config.log(
       __method__,
       {
-        message: "#{e.message}. Exiting now.",
+        message: e.message,
+        exit: true,
         backtrace: e.backtrace
       },
       Logger::Severity::ERROR
