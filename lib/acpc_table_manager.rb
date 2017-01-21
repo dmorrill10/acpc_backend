@@ -619,7 +619,7 @@ module AcpcTableManager
 
     options = {chdir: AcpcDealer::DEALER_DIRECTORY}
     if log_file
-      options[[:err, :out]] = [log_file, File::CREAT|File::WRONLY]
+      options[[:err, :out]] = [log_file, File::CREAT|File::WRONLY|File::APPEND]
     end
 
     pid = Timeout.timeout(3) do

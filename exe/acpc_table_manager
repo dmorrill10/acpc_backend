@@ -38,6 +38,13 @@ Signal.trap('TERM') { exit }
 
 communicator = AcpcTableManager::TableManagerReceiver.new('table-manager')
 
+AcpcTableManager.config.log(
+  __method__,
+  options: options,
+  version: AcpcTableManager::VERSION,
+  receive_channel: communicator.channel
+)
+
 loop do
   begin
     communicator.subscribe_with_timeout do |match_info|

@@ -73,6 +73,7 @@ begin
   log(
     __method__,
     options: options,
+    version: AcpcTableManager::VERSION,
     send_channel: @communicator.send_channel,
     receive_channel: @communicator.receive_channel,
     must_send_ready: must_send_ready
