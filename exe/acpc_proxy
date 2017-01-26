@@ -11,7 +11,7 @@ ARGV << '-h' if ARGV.empty?
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: #{$0} [options]"
-  
+
   opts.version = AcpcTableManager::VERSION
 
   opts.on_tail("-h", "--help", "Show this message") do
@@ -59,7 +59,7 @@ end
 Signal.trap("INT") { exit_and_del_saved }
 Signal.trap("TERM") { exit_and_del_saved }
 
-must_send_ready = !AcpcTableManager.config.next_hand_request_code.nil?
+must_send_ready = AcpcTableManager.config.must_send_ready
 
 @logger = AcpcTableManager.new_log(
   "#{options[:id]}.log",
@@ -88,10 +88,10 @@ begin
     options[:port],
     must_send_ready
   ) do |patt|
-    log 'start_proxy_block' 
+    log 'start_proxy_block'
     @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
   end
-  
+
   log 'starting event loop'
 
   loop do
@@ -104,9 +104,12 @@ begin
           @communicator.publish(
             AcpcTableManager::ProxyUtils.proxy_to_json(proxy, game_info)
           )
+        elsif data['kill']
+          log __method__, msg: 'Exiting'
+          exit_and_del_saved
         else
-          action = data[AcpcTableManager.config.action_key]
-          if action == AcpcTableManager.config.next_hand_request_code
+          action = data['action']
+          if action == 'next-hand'
             proxy.next_hand! do |patt|
               log 'next_hand! block', msg: 'Sending match state'
               @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
