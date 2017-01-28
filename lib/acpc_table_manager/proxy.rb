@@ -175,13 +175,15 @@ class Proxy
       return true
     end
 
-    (
-      @player_proxy.match_ended? ||
-      (
-        @player_proxy.hand_ended? &&
-        @player_proxy.match_state.hand_number >= @match.number_of_hands - 1
-      )
-    )
+    ended = if @player_proxy.stack_sizes
+      @player_proxy.players.any? do |player|
+        !((player.stack + player.winnings.to_f) > 0)
+      end
+    else
+      @player_proxy.match_state.hand_number >= @match.number_of_hands - 1
+    end
+
+    @player_proxy.match_ended? || (@player_proxy.hand_ended? && ended)
   end
 
   private
