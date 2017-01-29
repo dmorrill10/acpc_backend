@@ -65,7 +65,6 @@ must_send_ready = AcpcTableManager.config.must_send_ready
   "#{options[:id]}.log",
   File.join(AcpcTableManager.config.log_directory, 'proxies')
 )
-
 include AcpcTableManager::ProxyUtils
 
 @communicator = AcpcTableManager::ProxyCommunicator.new(options[:id])
@@ -91,7 +90,7 @@ begin
   ) do |patt|
     log 'start_proxy_block'
     @communicator.publish(
-      ProxyUtils.players_at_the_table_to_json(
+      AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
         patt,
         game_info['num_hands_per_match'],
         state_index
@@ -110,7 +109,7 @@ begin
         if data['resend']
           log __method__, msg: 'Resending match state'
           @communicator.publish(
-            ProxyUtils.players_at_the_table_to_json(
+            AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
               proxy,
               game_info['num_hands_per_match'],
               @state_index
@@ -126,7 +125,7 @@ begin
             proxy.next_hand! do |patt|
               log 'next_hand! block', msg: 'Sending match state'
               @communicator.publish(
-                ProxyUtils.players_at_the_table_to_json(
+                AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
                   patt,
                   game_info['num_hands_per_match'],
                   @state_index
@@ -149,7 +148,7 @@ begin
               proxy.play!(action) do |patt|
                 log 'play! block', msg: 'Sending match state'
                 @communicator.publish(
-                  ProxyUtils.players_at_the_table_to_json(
+                  AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
                     patt,
                     game_info['num_hands_per_match'],
                     @state_index
