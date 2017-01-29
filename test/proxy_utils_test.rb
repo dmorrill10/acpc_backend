@@ -94,6 +94,189 @@ describe ProxyUtils do
       end
     end
   end
+  describe 'players_at_the_table_to_json' do
+    it 'works at the beginning of a 2-player no-limit hand' do
+      game_def = GameDefinition.new(
+        betting_type: 'nolimit',
+        first_player_positions: [2, 1, 1, 1],
+        chip_stacks: [20000, 20000],
+        blinds: [100, 50],
+        number_of_ranks: 13,
+        number_of_suits: 4,
+        number_of_hole_cards: 2
+      )
+      seat = 0
+      state_index = 9001
+      match_state = MatchState.parse("#{MatchState::LABEL}:0:0::AhKc|")
+      patient = ProxyUtils.players_at_the_table_to_json(
+        PlayersAtTheTable.new(game_def, seat).update!(match_state),
+        100,
+        state_index
+      )
+      parsed_patient = JSON.parse(patient)
+      x_patient = {
+                 "status" => {
+               "hand_has_ended" => false,
+              "match_has_ended" => nil,
+                   "hand_index" => 0,
+                  "state_index" => state_index
+          },
+          "legal_actions" => [
+              {
+                'type' => "c",
+                'cost' => 50.0
+              },
+              {
+                'type' => 'f',
+                'cost' => 0.0
+              },
+              {
+                'type' => 'r',
+                'cost' => 150.0
+              },
+              {
+                'type' => 'r',
+                'cost' => 19950.0
+              }
+          ],
+                  "table" => {
+              "board_cards" => [],
+                "pot_chips" => 0.0,
+                     "user" => {
+                                 "seat" => seat,
+                    "chip-stack-amount" => 19900,
+                        "contributions" => [
+                      100
+                  ],
+                  "chip-balance-amount" => 0,
+                           "hole-cards" => [
+                      {
+                          "rank" => "A",
+                          "suit" => "h"
+                      },
+                      {
+                          "rank" => "K",
+                          "suit" => "c"
+                      }
+                  ],
+                             "winnings" => 0.0,
+                               "dealer" => false,
+                               "acting" => false
+              },
+                "opponents" => [
+                  {
+                                     "seat" => 1,
+                        "chip-stack-amount" => 19950,
+                            "contributions" => [
+                          50
+                      ],
+                      "chip-balance-amount" => 0,
+                               "hole-cards" => [{}, {}],
+                                 "winnings" => 0.0,
+                                   "dealer" => true,
+                                   "acting" => true
+                  }
+              ]
+          }
+      }
+      parsed_patient.must_equal x_patient
+    end
+    it 'works at the end of a 2-player no-limit hand' do
+      game_def = GameDefinition.new(
+        betting_type: 'nolimit',
+        first_player_positions: [2, 1, 1, 1],
+        chip_stacks: [20000, 20000],
+        blinds: [100, 50],
+        number_of_ranks: 13,
+        number_of_suits: 4,
+        number_of_hole_cards: 2
+      )
+      seat = 0
+      state_index = 9001
+      match_state = MatchState.parse("#{MatchState::LABEL}:0:99:cr300c/r500c/cc/cc:AhKc|Ts7h/2s5d7c/Jh/Jc")
+      patient = ProxyUtils.players_at_the_table_to_json(
+        PlayersAtTheTable.new(game_def, seat).update!(match_state),
+        100,
+        state_index
+      )
+      parsed_patient = JSON.parse(patient)
+      x_patient = {
+                 "status" => {
+               "hand_has_ended" => true,
+              "match_has_ended" => true,
+                   "hand_index" => 99,
+                  "state_index" => state_index
+          },
+          "legal_actions" => [],
+                  "table" => {
+            "board_cards" => [
+              {
+                "rank" => "2",
+                "suit" => "s"
+              },
+              {
+                "rank" => "5",
+                "suit" => "d"
+              },
+              {
+                "rank" => "7",
+                "suit" => "c"
+              },
+              {
+                "rank" => "J",
+                "suit" => "h"
+              },
+              {
+                "rank" => "J",
+                "suit" => "c"
+              }
+            ],
+            "pot_chips" => 1000,
+                     "user" => {
+                                 "seat" => seat,
+                    "chip-stack-amount" => 19500,
+                        "contributions" => [300, 200, 0, 0],
+                  "chip-balance-amount" => -500.0,
+                           "hole-cards" => [
+                      {
+                          "rank" => "A",
+                          "suit" => "h"
+                      },
+                      {
+                          "rank" => "K",
+                          "suit" => "c"
+                      }
+                  ],
+                             "winnings" => 0.0,
+                               "dealer" => false,
+                               "acting" => false
+              },
+                "opponents" => [
+                  {
+                                     "seat" => 1,
+                        "chip-stack-amount" => 20500,
+                            "contributions" => [300, 200, 0, 0],
+                      "chip-balance-amount" => 500.0,
+                               "hole-cards" => [
+                                 {
+                                   "rank" => "T",
+                                   "suit" => "s"
+                                 },
+                                 {
+                                   "rank" => "7",
+                                   "suit" => "h"
+                                 }
+                               ],
+                                 "winnings" => 1000.0,
+                                   "dealer" => true,
+                                   "acting" => false
+                  }
+              ]
+          }
+      }
+      parsed_patient.must_equal x_patient
+    end
+  end
   describe 'players' do
     it 'works' do
       wager_size = 10
@@ -142,20 +325,30 @@ describe ProxyUtils do
         ]
       ]
 
-      x_player_names = ['opponent0', 'user', 'opponent2']
       seat = 1
+      x_is_acting = [
+        [false, false, true],
+        [false, true, false],
+        [true, false, false]
+      ]
+      x_is_dealer = [
+        [true, false, false],
+        [false, false, true],
+        [false, true, false]
+      ]
+      x_folded_seats = [1, 0, 2]
 
-      (0..game_def.number_of_players-1).each do |position|
+      game_def.number_of_players.times do |position|
         hands = []
-        hands << ''
-        hands << '_'*game_def.number_of_hole_cards
-        hands << '_'*game_def.number_of_hole_cards
-        hands[position] = arbitrary_hole_card_hand unless hands[position].empty?
-
-        hands_for_string = hands.dup
-        hands_for_string[position] = arbitrary_hole_card_hand
-        hand_string = hands_for_string.inject('') do |hand_string, hand|
-          hand_string << "#{hand.to_s.gsub(/^_+$/, '')}#{MatchState::HAND_SEPARATOR}"
+        game_def.number_of_players.times.map do
+          hands << [{}]*game_def.number_of_hole_cards
+        end
+        hands[seat] = [{'rank' => 'T', 'suit' => 's'}]
+        hand_string = hands.rotate(seat - position).inject('') do |s, hand|
+          cards = hand.inject('') do |t, card|
+            t += "#{card['rank']}#{card['suit']}"
+          end
+          s << "#{cards}#{MatchState::HAND_SEPARATOR}"
         end[0..-2]
 
         x_contributions = x_actions.rotate(position - seat).map_with_index do |actions_per_player, i|
@@ -177,40 +370,45 @@ describe ProxyUtils do
         # Balances should only be adjusted at the end of the hand
         x_balances = x_contributions.map { |contrib| 0 }
 
+        hands[x_folded_seats[position]] = []
+
         x_players = [
           {
-            'name' => x_player_names[0],
             'seat' => 0,
-            'chip_stack' => x_stacks[0],
-            'chip_contributions' => x_contributions[0],
-            'chip_balance' => x_balances[0],
-            'hole_cards' => hands.rotate(position - seat)[0].to_s,
-            'winnings' => 0.to_f
+            'chip-stack-amount' => x_stacks[0],
+            'contributions' => x_contributions[0],
+            'chip-balance-amount' => x_balances[0],
+            'hole-cards' => hands[0],
+            'winnings' => 0.to_f,
+            'dealer' => x_is_dealer[position][0],
+            'acting' => x_is_acting[position][0]
           },
           {
-            'name' => x_player_names[1],
             'seat' => 1,
-            'chip_stack' => x_stacks[1],
-            'chip_contributions' => x_contributions[1],
-            'chip_balance' => x_balances[1],
-            'hole_cards' => hands[position].to_s,
-            'winnings' => 0.to_f
+            'chip-stack-amount' => x_stacks[1],
+            'contributions' => x_contributions[1],
+            'chip-balance-amount' => x_balances[1],
+            'hole-cards' => hands[1],
+            'winnings' => 0.to_f,
+            'dealer' => x_is_dealer[position][1],
+            'acting' => x_is_acting[position][1]
           },
           {
-            'name' => x_player_names[2],
             'seat' => 2,
-            'chip_stack' => x_stacks[2],
-            'chip_contributions' => x_contributions[2],
-            'chip_balance' => x_balances[2],
-            'hole_cards' => hands.rotate(position - seat)[2].to_s,
-            'winnings' => 0.to_f
+            'chip-stack-amount' => x_stacks[2],
+            'contributions' => x_contributions[2],
+            'chip-balance-amount' => x_balances[2],
+            'hole-cards' => hands[2],
+            'winnings' => 0.to_f,
+            'dealer' => x_is_dealer[position][2],
+            'acting' => x_is_acting[position][2]
           }
         ]
 
-        patient.players(
-          PlayersAtTheTable.new(game_def, seat).update!(match_state),
-          x_player_names
-        ).must_equal x_players
+        players = patient.players(
+          PlayersAtTheTable.new(game_def, seat).update!(match_state)
+        )
+        players.must_equal x_players
         @patient = nil
       end
     end
@@ -233,8 +431,7 @@ describe ProxyUtils do
           MatchState.parse(
             'MATCHSTATE:0:2:cr20000c///:8h8s|5s5c/KdTcKh/9h/Jh'
           ),
-        ),
-        ['p1', 'p2']
+        )
       ).map { |pl| pl['winnings'] }.must_equal [40000.0, 0.0]
     end
   end
@@ -452,8 +649,4 @@ describe ProxyUtils do
       end
     end
   end
-end
-
-def arbitrary_hole_card_hand
-  '2s3h'
 end

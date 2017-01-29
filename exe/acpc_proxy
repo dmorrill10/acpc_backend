@@ -69,6 +69,7 @@ must_send_ready = AcpcTableManager.config.must_send_ready
 include AcpcTableManager::ProxyUtils
 
 @communicator = AcpcTableManager::ProxyCommunicator.new(options[:id])
+@state_index = 0
 
 last_message_received = Time.now
 
@@ -89,7 +90,14 @@ begin
     must_send_ready
   ) do |patt|
     log 'start_proxy_block'
-    @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
+    @communicator.publish(
+      ProxyUtils.players_at_the_table_to_json(
+        patt,
+        game_info['num_hands_per_match'],
+        state_index
+      )
+    )
+    state_index += 1
   end
 
   log 'starting event loop'
@@ -102,8 +110,13 @@ begin
         if data['resend']
           log __method__, msg: 'Resending match state'
           @communicator.publish(
-            AcpcTableManager::ProxyUtils.proxy_to_json(proxy, game_info)
+            ProxyUtils.players_at_the_table_to_json(
+              proxy,
+              game_info['num_hands_per_match'],
+              @state_index
+            )
           )
+          @state_index += 1
         elsif data['kill']
           log __method__, msg: 'Exiting'
           exit_and_del_saved
@@ -112,7 +125,14 @@ begin
           if action == 'next-hand'
             proxy.next_hand! do |patt|
               log 'next_hand! block', msg: 'Sending match state'
-              @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
+              @communicator.publish(
+                ProxyUtils.players_at_the_table_to_json(
+                  patt,
+                  game_info['num_hands_per_match'],
+                  @state_index
+                )
+              )
+              @state_index += 1
             end
 
             log(
@@ -128,7 +148,14 @@ begin
               action = PokerAction.new(action) unless action.is_a?(PokerAction)
               proxy.play!(action) do |patt|
                 log 'play! block', msg: 'Sending match state'
-                @communicator.publish AcpcTableManager::ProxyUtils.proxy_to_json(patt, game_info)
+                @communicator.publish(
+                  ProxyUtils.players_at_the_table_to_json(
+                    patt,
+                    game_info['num_hands_per_match'],
+                    @state_index
+                  )
+                )
+                @state_index += 1
               end
 
               log(

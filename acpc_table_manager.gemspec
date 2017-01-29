@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'redis', '~> 3.3'
 
   # For poker logic
-  spec.add_dependency "acpc_poker_types", '~> 7.6'
+  spec.add_dependency "acpc_poker_types", '~> 7.8'
   spec.add_dependency 'acpc_dealer', '~> 3.1'
   spec.add_dependency 'acpc_poker_player_proxy', '~> 1.6'
 
