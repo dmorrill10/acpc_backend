@@ -117,7 +117,7 @@ describe ProxyUtils do
       x_patient = {
                  "status" => {
                "hand_has_ended" => false,
-              "match_has_ended" => nil,
+              "match_has_ended" => false,
                    "hand_index" => 0,
                   "state_index" => state_index
           },
@@ -144,12 +144,10 @@ describe ProxyUtils do
                 "pot_chips" => 0.0,
                      "user" => {
                                  "seat" => seat,
-                    "chip-stack-amount" => 19900,
-                        "contributions" => [
-                      100
-                  ],
-                  "chip-balance-amount" => 0,
-                           "hole-cards" => [
+                    "chipStackAmount" => 19900,
+                        "contribution" => 100,
+                  "chipBalanceAmount" => 0,
+                           "holeCards" => [
                       {
                           "rank" => "A",
                           "suit" => "h"
@@ -166,12 +164,10 @@ describe ProxyUtils do
                 "opponents" => [
                   {
                                      "seat" => 1,
-                        "chip-stack-amount" => 19950,
-                            "contributions" => [
-                          50
-                      ],
-                      "chip-balance-amount" => 0,
-                               "hole-cards" => [{}, {}],
+                        "chipStackAmount" => 19950,
+                            "contribution" => 50,
+                      "chipBalanceAmount" => 0,
+                               "holeCards" => [{}, {}],
                                  "winnings" => 0.0,
                                    "dealer" => true,
                                    "acting" => true
@@ -234,10 +230,10 @@ describe ProxyUtils do
             "pot_chips" => 1000,
                      "user" => {
                                  "seat" => seat,
-                    "chip-stack-amount" => 19500,
-                        "contributions" => [300, 200, 0, 0],
-                  "chip-balance-amount" => -500.0,
-                           "hole-cards" => [
+                    "chipStackAmount" => 19500,
+                        "contribution" => 0,
+                  "chipBalanceAmount" => -500.0,
+                           "holeCards" => [
                       {
                           "rank" => "A",
                           "suit" => "h"
@@ -254,10 +250,10 @@ describe ProxyUtils do
                 "opponents" => [
                   {
                                      "seat" => 1,
-                        "chip-stack-amount" => 20500,
-                            "contributions" => [300, 200, 0, 0],
-                      "chip-balance-amount" => 500.0,
-                               "hole-cards" => [
+                        "chipStackAmount" => 20500,
+                            "contribution" => 0,
+                      "chipBalanceAmount" => 500.0,
+                               "holeCards" => [
                                  {
                                    "rank" => "T",
                                    "suit" => "s"
@@ -343,10 +339,10 @@ describe ProxyUtils do
         game_def.number_of_players.times.map do
           hands << [{}]*game_def.number_of_hole_cards
         end
-        hands[seat] = [{'rank' => 'T', 'suit' => 's'}]
+        hands[seat] = [{rank: 'T', suit: 's'}]
         hand_string = hands.rotate(seat - position).inject('') do |s, hand|
           cards = hand.inject('') do |t, card|
-            t += "#{card['rank']}#{card['suit']}"
+            t += "#{card[:rank]}#{card[:suit]}"
           end
           s << "#{cards}#{MatchState::HAND_SEPARATOR}"
         end[0..-2]
@@ -372,38 +368,18 @@ describe ProxyUtils do
 
         hands[x_folded_seats[position]] = []
 
-        x_players = [
+        x_players = game_def.number_of_players.times.map do |i|
           {
-            'seat' => 0,
-            'chip-stack-amount' => x_stacks[0],
-            'contributions' => x_contributions[0],
-            'chip-balance-amount' => x_balances[0],
-            'hole-cards' => hands[0],
-            'winnings' => 0.to_f,
-            'dealer' => x_is_dealer[position][0],
-            'acting' => x_is_acting[position][0]
-          },
-          {
-            'seat' => 1,
-            'chip-stack-amount' => x_stacks[1],
-            'contributions' => x_contributions[1],
-            'chip-balance-amount' => x_balances[1],
-            'hole-cards' => hands[1],
-            'winnings' => 0.to_f,
-            'dealer' => x_is_dealer[position][1],
-            'acting' => x_is_acting[position][1]
-          },
-          {
-            'seat' => 2,
-            'chip-stack-amount' => x_stacks[2],
-            'contributions' => x_contributions[2],
-            'chip-balance-amount' => x_balances[2],
-            'hole-cards' => hands[2],
-            'winnings' => 0.to_f,
-            'dealer' => x_is_dealer[position][2],
-            'acting' => x_is_acting[position][2]
+            seat: i,
+            chipStackAmount: x_stacks[i],
+            contribution: x_contributions[i].last,
+            chipBalanceAmount: x_balances[i],
+            holeCards: hands[i],
+            winnings: 0.to_f,
+            dealer: x_is_dealer[position][i],
+            acting: x_is_acting[position][i]
           }
-        ]
+        end
 
         players = patient.players(
           PlayersAtTheTable.new(game_def, seat).update!(match_state)
@@ -432,7 +408,7 @@ describe ProxyUtils do
             'MATCHSTATE:0:2:cr20000c///:8h8s|5s5c/KdTcKh/9h/Jh'
           ),
         )
-      ).map { |pl| pl['winnings'] }.must_equal [40000.0, 0.0]
+      ).map { |pl| pl[:winnings] }.must_equal [40000.0, 0.0]
     end
   end
   describe 'minimum_wager_to' do

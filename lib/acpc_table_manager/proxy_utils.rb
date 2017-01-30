@@ -115,7 +115,7 @@ module AcpcTableManager
           state_index: state_index
         },
         legal_actions: patt.legal_actions.map do |action|
-          {'type': action.to_s, 'cost': action.cost}
+          {type: action.to_s, cost: action.cost}
         end,
         table: {
           board_cards: (
@@ -182,19 +182,25 @@ module AcpcTableManager
           [{}] * patt.game_def.number_of_hole_cards
         else
           player.hand.map do |c|
-            {'rank' => c.rank.to_acpc, 'suit' => c.suit.to_acpc}
+            {rank: c.rank.to_acpc, suit: c.suit.to_acpc}
           end
         end
 
         {
-          'seat' => player.seat.to_i,
-          'chip-stack-amount' => player.stack.to_i,
-          'contributions' => player.contributions.map { |contrib| contrib.to_i },
-          'chip-balance-amount' => player.balance,
-          'hole-cards' => hole_cards,
-          'winnings' => player.winnings.to_f,
-          'dealer' => player.seat == patt.dealer_player.seat.to_i,
-          'acting' => (
+          seat: player.seat.to_i,
+          chipStackAmount: player.stack.to_i,
+          contribution: (
+            if player.contributions.length < patt.match_state.round
+              0
+            else
+              player.contributions.last.to_i
+            end
+          ),
+          chipBalanceAmount: player.balance,
+          holeCards: hole_cards,
+          winnings: player.winnings.to_f,
+          dealer: player.seat == patt.dealer_player.seat.to_i,
+          acting: (
             patt.next_player_to_act && (
               player.seat == patt.next_player_to_act.seat
             )
