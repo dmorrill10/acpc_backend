@@ -190,7 +190,7 @@ module AcpcTableManager
           seat: player.seat.to_i,
           chipStackAmount: player.stack.to_i,
           contribution: (
-            if player.contributions.length < patt.match_state.round
+            if player.contributions.length <= patt.match_state.round
               0
             else
               player.contributions.last.to_i
