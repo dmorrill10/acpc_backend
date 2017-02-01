@@ -43,6 +43,7 @@ module AcpcTableManager
       @channel = self.class.channel_from_id(id)
       @redis = AcpcTableManager.new_redis_connection()
     end
+    def del() @redis.del @channel end
   end
 
   class Receiver < CommunicatorComponent
@@ -69,7 +70,6 @@ module AcpcTableManager
       @redis.rpush @channel, data
       @redis.publish @channel, data
     end
-    def del() @redis.del @channel end
   end
 
   class ProxyReceiver < Receiver
@@ -87,7 +87,10 @@ module AcpcTableManager
     end
     def send_channel() @sender.channel end
     def receive_channel() @receiver.channel end
-    def del_saved() @sender.del end
+    def del_saved
+      @receiver.del
+      @sender.del
+    end
   end
 
   module TimeRefinement
@@ -573,7 +576,7 @@ module AcpcTableManager
 
       begin
         port_numbers = allocate_ports(next_match[:players], game, ports_in_use)
-        
+
         dealer_info, player_info = start_match(
           game,
           next_match[:name],
