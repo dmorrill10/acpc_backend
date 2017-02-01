@@ -486,7 +486,7 @@ describe ProxyUtils do
       wager_size = 10
       x_game_def = {
         first_player_positions: [0, 0, 0],
-        chip_stacks: [100, 200, 150],
+        chip_stacks: [160, 200, 150],
         blinds: [0, 10, 5],
         raise_sizes: [wager_size]*3,
         number_of_ranks: 3
@@ -495,9 +495,9 @@ describe ProxyUtils do
 
       x_min_wagers = [
         [2*wager_size],
-        [2*wager_size, 50, 100, 100, wager_size],
+        [2*wager_size, 50, 150, 160, wager_size],
         [wager_size, wager_size, wager_size],
-        [wager_size, 2*wager_size, 50, 90, 90]
+        [wager_size, 2*wager_size, 50, 90, nil]
       ]
 
       hands = game_def.number_of_players.times.map { |i| '' }
@@ -523,7 +523,6 @@ describe ProxyUtils do
             match_state = MatchState.parse(
               "#{MatchState::LABEL}:#{position}:0:#{betting_sequence}:#{hand_string}"
             )
-
             patient.minimum_wager_to(match_state, game_def).must_equal x_min_wagers[i][j]
             @patient = nil
           end

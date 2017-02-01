@@ -213,10 +213,18 @@ module AcpcTableManager
     def self.minimum_wager_to(state, game_def)
       return 0 unless state.next_to_act(game_def)
 
-      (
-        state.min_wager_by(game_def) +
-        chip_contribution_after_calling(state, game_def)
-      ).ceil
+      min_wager = [
+        (
+          state.min_wager_by(game_def) +
+          chip_contribution_after_calling(state, game_def)
+        ).ceil,
+        state.players(game_def)[state.next_to_act(game_def)].stack
+      ].min
+      if chip_contribution_after_calling(state, game_def) < state.players(game_def)[state.next_to_act(game_def)].stack
+        min_wager
+      else
+        nil
+      end
     end
 
     # Over round

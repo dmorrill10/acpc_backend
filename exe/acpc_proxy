@@ -68,6 +68,7 @@ must_send_ready = AcpcTableManager.config.must_send_ready
 include AcpcTableManager::ProxyUtils
 
 @communicator = AcpcTableManager::ProxyCommunicator.new(options[:id])
+@communicator.del_saved # Clear stale messages to avoid unpredictable behaviour
 @state_index = 0
 
 last_message_received = Time.now
