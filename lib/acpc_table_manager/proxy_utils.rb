@@ -196,6 +196,11 @@ module AcpcTableManager
               player.contributions.last.to_i
             end
           ),
+          contributionFromPreviousRounds: (
+            patt.match_state.round.times.inject(0) do |s, i|
+              s += player.contributions[i].to_i
+            end
+          ),
           chipBalanceAmount: player.balance,
           holeCards: hole_cards,
           winnings: player.winnings.to_f,

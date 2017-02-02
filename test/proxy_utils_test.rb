@@ -146,6 +146,7 @@ describe ProxyUtils do
                                  "seat" => seat,
                     "chipStackAmount" => 19900,
                         "contribution" => 100,
+      "contributionFromPreviousRounds" => 0.0,
                   "chipBalanceAmount" => 0,
                            "holeCards" => [
                       {
@@ -166,6 +167,7 @@ describe ProxyUtils do
                                      "seat" => 1,
                         "chipStackAmount" => 19950,
                             "contribution" => 50,
+          "contributionFromPreviousRounds" => 0.0,
                       "chipBalanceAmount" => 0,
                                "holeCards" => [{}, {}],
                                  "winnings" => 0.0,
@@ -232,6 +234,7 @@ describe ProxyUtils do
                                  "seat" => seat,
                     "chipStackAmount" => 19500,
                         "contribution" => 0,
+      "contributionFromPreviousRounds" => 500.0,
                   "chipBalanceAmount" => -500.0,
                            "holeCards" => [
                       {
@@ -252,6 +255,7 @@ describe ProxyUtils do
                                      "seat" => 1,
                         "chipStackAmount" => 20500,
                             "contribution" => 0,
+          "contributionFromPreviousRounds" => 500.0,
                       "chipBalanceAmount" => 500.0,
                                "holeCards" => [
                                  {
@@ -373,6 +377,7 @@ describe ProxyUtils do
             seat: i,
             chipStackAmount: x_stacks[i],
             contribution: x_contributions[i].last,
+            contributionFromPreviousRounds: x_contributions[i][0..-2].inject(:+),
             chipBalanceAmount: x_balances[i],
             holeCards: hands[i],
             winnings: 0.to_f,
