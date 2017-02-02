@@ -1,3 +1,3 @@
 module AcpcTableManager
-  VERSION = '4.0.0-nmd'.freeze
+  VERSION = '4.0.0'.freeze
 end
