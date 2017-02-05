@@ -89,7 +89,7 @@ begin
     options[:port],
     must_send_ready
   ) do |patt|
-    log 'start_proxy_block'
+    log 'start_proxy_block', match_state: patt.match_state.to_s
     @communicator.publish(
       AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
         patt,
@@ -124,7 +124,7 @@ begin
           action = data['action']
           if action == 'next-hand'
             proxy.next_hand! do |patt|
-              log 'next_hand! block', msg: 'Sending match state'
+              log 'next_hand! block', match_state: patt.match_state.to_s
               @communicator.publish(
                 AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
                   patt,
@@ -147,7 +147,7 @@ begin
             if proxy.users_turn_to_act?
               action = PokerAction.new(action) unless action.is_a?(PokerAction)
               proxy.play!(action) do |patt|
-                log 'play! block', msg: 'Sending match state'
+                log 'play! block', match_state: patt.match_state.to_s
                 @communicator.publish(
                   AcpcTableManager::ProxyUtils.players_at_the_table_to_json(
                     patt,

@@ -31,7 +31,7 @@ module AcpcTableManager
         must_send_ready
       ) do |patt|
         if patt.match_state
-          log __method__, msg: 'Sending match state'
+          log __method__, match_state: patt.match_state.to_s
           @communicator.publish(
             ProxyUtils.players_at_the_table_to_json(
               patt,
