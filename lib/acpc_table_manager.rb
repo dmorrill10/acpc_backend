@@ -14,6 +14,7 @@ require_relative 'acpc_table_manager/monkey_patches'
 require_relative 'acpc_table_manager/simple_logging'
 require_relative 'acpc_table_manager/utils'
 require_relative 'acpc_table_manager/proxy_utils'
+require_relative 'acpc_table_manager/acpc_proxy'
 
 using AcpcTableManager::SimpleLogging::MessageFormatting
 
