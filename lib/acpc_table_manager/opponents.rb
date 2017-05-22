@@ -3,6 +3,7 @@ require 'process_runner'
 require_relative 'config'
 require_relative 'simple_logging'
 require 'fileutils'
+require 'shellwords'
 
 module AcpcTableManager
 module Opponents
@@ -26,7 +27,7 @@ module Opponents
 
     bot_start_commands = opponents.map do |name, info|
       {
-        args: [info[:runner], info[:host], info[:port]],
+        args: [info[:runner], info[:host], info[:port], Shellwords.escape(match.random_seed.to_s)],
         log: File.join(opponents_log_dir, "#{match.name}.#{match.id}.#{name}.log")
       }
     end
